@@ -2,7 +2,7 @@
   "name": "sommark-lsp",
   "version": "1.0.0",
   "bin": {
-    "sommark-lsp": "./server/server.js"
+    "sommark-lsp": "server/server.js"
   },
   "files": [
     "server",
