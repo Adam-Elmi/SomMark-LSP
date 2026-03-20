@@ -11,11 +11,10 @@
     "LICENSE"
   ],
   "description": "Language Server for SomMark",
-  "main": "index.js",
   "scripts": {
     "start": "node server/server.js --stdio",
-    "test": "node tests/verify_diagnostics.js",
-    "test:file": "node tests/test_file.js"
+    "test": "node tests/verify_v3_3_0.js",
+    "test:file": "node tests/test_formatting.js"
   },
   "keywords": [
     "sommark",
