@@ -1,0 +1,18 @@
+{
+  "languageserver": {
+    "sommark-lsp": {
+      "command": "sommark-lsp",
+      "args": [
+        "--stdio"
+      ],
+      "filetypes": [
+        "sommark",
+        "smark"
+      ],
+      "rootPatterns": [
+        "package.json",
+        ".git"
+      ]
+    }
+  }
+}
