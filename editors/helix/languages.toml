@@ -1,0 +1,11 @@
+[[language]]
+name = "sommark"
+scope = "source.sommark"
+injection-regex = "sommark"
+file-types = ["smark"]
+roots = ["package.json", ".git"]
+language-servers = [ "sommark-lsp" ]
+
+[language-server.sommark-lsp]
+command = "sommark-lsp"
+args = ["--stdio"]
