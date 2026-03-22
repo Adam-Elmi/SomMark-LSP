@@ -1,47 +1,31 @@
-# SomMark Language Server (VS Code Extension)
+# SomMark Language Server
 
-This extension provides real-time diagnostics and semantic highlighting for SomMark files (`.smark`) using the **SomMark-LSP** server.
+A VS Code extension for the SomMark language. It provides features like real-time diagnostics, semantic syntax highlighting, and automatic code formatting.
 
 ## Features
-- **Diagnostics**: Real-time syntax error reporting.
-- **Semantic Highlighting**: Advanced coloring for tags, identifiers, and block content.
 
-## Setup for Development
+- **Semantic Highlighting**: Accurate coloring for tags, identifiers, and block content.
+- **Real-time Diagnostics**: Shows syntax errors as you type.
+- **Code Formatting**: Automatic formatting for your SomMark files using the Format Document command.
 
-1. Open this folder in VS Code: `editors/vscode`.
-2. Run `npm install`.
-3. Press **F5** (or `Debug > Start Debugging`) to launch a new "Extension Development Host" window.
-4. Open a `.smark` file to see the LSP in action.
-
-## Distributing the Extension
-
-### 1. Local Installation (.vsix)
-To create an installable package for yourself or friends:
-
-1. Install `vsce` globally:
-   ```bash
-   npm install -g @vscode/vsce
-   ```
-2. Package the extension:
-   ```bash
-   vsce package
-   ```
-3. Install the resulting `.vsix` file in VS Code (`Extensions > ... > Install from VSIX...`).
-
-### 2. Publishing to the Marketplace
-To share with the world:
-
-1. Create an account on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/).
-2. Create a Publisher.
-3. Get a Personal Access Token (PAT) from Azure DevOps.
-4. Login via CLI:
-   ```bash
-   vsce login <publisher-name>
-   ```
-5. Publish:
-   ```bash
-   vsce publish
-   ```
 
 ## Configuration
-The extension is pre-configured to find the LSP server in the `server/` directory of the `SomMark-LSP` project.
+
+The extension works automatically without any extra settings.
+
+## Requirements
+
+- VS Code version 1.104.0 or higher.
+- Files must end with .smark.
+ 
+
+## For Developers
+
+To test the extension locally:
+
+1. Open the `editors/vscode` folder in VS Code.
+2. Run `npm install` in your terminal.
+3. Press F5 to start a new window with the extension active.
+
+---
+Created by [Adam-Elmi](https://github.com/Adam-Elmi)
