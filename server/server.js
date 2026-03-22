@@ -81,7 +81,7 @@ connection.onDocumentFormatting(async (params) => {
 			newText: formatted
 		}];
 	} catch (e) {
-		console.error("[Formatting Error]:", e.message);
+		connection.console.error(`[Formatting Error]: ${e.message}`);
 		return [];
 	}
 });

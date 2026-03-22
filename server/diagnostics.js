@@ -1,19 +1,25 @@
 import { DiagnosticSeverity } from "vscode-languageserver/node.js";
-import SomMark from "sommark";
+import SomMark, { findAndLoadConfig } from "sommark";
+import { fileURLToPath } from "node:url";
 
 // ========================================================================== //
 //  1. Document Validation Logic                                              //
 // ========================================================================== //
 export async function validateTextDocument(connection, document) {
-    const text = document.getText();
-    // console.log("lexSync source:", lexSync.toString());
+	const text = document.getText();
+	const filename = document.uri.startsWith("file://") ? fileURLToPath(document.uri) : document.uri;
 
-    const diagnostics = [];
-    const smark = new SomMark({ 
-        src: text, 
-        format: 'html',
-        filename: document.uri 
-    });
+	const config = await findAndLoadConfig(filename);
+
+	const diagnostics = [];
+	const smark = new SomMark({
+		src: text,
+		format: config.format || "html", // Default to html if not specified in config
+		filename: filename,
+		mapperFile: config.mappingFile,
+		plugins: config.plugins,
+		priority: config.priority
+	});
 
     try {
         await smark.parse();
