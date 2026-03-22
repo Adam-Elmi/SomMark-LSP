@@ -1,7 +1,7 @@
 {
   "name": "sommark-lsp",
   "displayName": "SomMark Language Server",
-  "description": "Real-time diagnostics for SomMark files powered by the SomMark Language Server.",
+  "description": "Real-time diagnostics, code formatting, and semantic highlighting for SomMark files.",
   "version": "1.0.1",
   "publisher": "Adam-Elmi",
   "engines": {
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "sommark": "^3.3.2",
+    "sommark-lsp": "latest",
     "vscode-languageclient": "^9.0.1"
   }
 }

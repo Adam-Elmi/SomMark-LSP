@@ -4,8 +4,8 @@ const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
 let client;
 
 function activate(context) {
-    // Path to the LSP server module (absolute path to the SomMark-LSP server/server.js)
-    const serverModule = path.join(__dirname, '..', '..', 'server', 'server.js');
+    // Path to the LSP server module (relative to the extension folder)
+    const serverModule = context.asAbsolutePath(path.join('node_modules', 'sommark-lsp', 'server', 'server.js'));
     console.info(`SomMark LSP: Starting server from ${serverModule}`);
 
     const serverOptions = {
