@@ -32,7 +32,7 @@
   },
   "icon": "icons/sommark.png",
   "dependencies": {
-    "sommark": "^3.3.1",
+    "sommark": "^3.3.2",
     "vscode-languageclient": "^9.0.1"
   }
 }
