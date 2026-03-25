@@ -5,6 +5,7 @@ A VS Code extension for the SomMark language. It provides features like real-tim
 ## Features
 
 - **Semantic Highlighting**: Accurate coloring for tags, identifiers, and block content.
+- **Dynamic Syntax Injection**: "Borrow" syntax highlighting for 70+ languages (JavaScript, CSS, Python, SQL, etc.) inside `@_Code_@`, `@_Style_@`, and `@_Script_@` blocks.
 - **Real-time Diagnostics**: Shows syntax errors as you type.
 - **Code Formatting**: Automatic formatting for your SomMark files using the Format Document command.
 
