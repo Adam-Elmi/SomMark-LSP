@@ -1,6 +1,6 @@
 {
   "name": "sommark-lsp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "bin": {
     "sommark-lsp": "server/server.js"
   },
@@ -26,7 +26,7 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "sommark": "^3.3.2",
+    "sommark": "^3.3.4",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
   }
