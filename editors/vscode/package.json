@@ -117,7 +117,7 @@
   },
   "dependencies": {
     "sommark": "^3.3.4",
-    "sommark-lsp": "latest",
+    "sommark-lsp": "^1.0.2",
     "vscode-languageclient": "^9.0.1"
   }
 }
