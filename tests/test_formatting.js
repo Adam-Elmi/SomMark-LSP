@@ -26,16 +26,11 @@ async function testFormatting() {
 
     const smark = new SomMark({
         src: text,
-        format: 'html',
-        plugins: [
-            { name: 'sommark-format', options: { indentString } }
-        ]
+        format: 'html'
     });
 
     try {
-        await smark.parse();
-        const formatPlugin = smark.plugins.find(p => p.name === 'sommark-format');
-        const formatted = formatPlugin ? formatPlugin.formattedSource : text;
+        const formatted = await smark.format({ indentString });
 
         console.log("Formatted Text:\n", formatted);
         

@@ -7,6 +7,7 @@ import {
 } from "vscode-languageserver/node.js";
 
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { fileURLToPath } from "node:url";
 import SomMark from "sommark";
 import { validateTextDocument } from "./diagnostics.js";
 import { legend, computeSemanticTokens } from "./semantic_tokens.js";
@@ -60,18 +61,15 @@ connection.onDocumentFormatting(async (params) => {
 	const text = document.getText();
 	const indentString = params.options.insertSpaces ? ' '.repeat(params.options.tabSize) : '\t';
 
+	const filename = document.uri.startsWith("file://") ? fileURLToPath(document.uri) : document.uri;
 	const smark = new SomMark({
 		src: text,
 		format: 'html',
-		plugins: [
-			{ name: 'sommark-format', options: { indentString } }
-		]
+		filename: filename
 	});
 
 	try {
-		await smark.parse();
-		const formatPlugin = smark.plugins.find(p => p.name === 'sommark-format');
-		const formatted = formatPlugin ? formatPlugin.formattedSource : text;
+		const formatted = await smark.format({ indentString });
 
 		return [{
 			range: {

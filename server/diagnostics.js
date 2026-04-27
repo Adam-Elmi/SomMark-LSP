@@ -16,9 +16,8 @@ export async function validateTextDocument(connection, document) {
 		src: text,
 		format: config.format || "html", // Default to html if not specified in config
 		filename: filename,
-		mapperFile: config.mappingFile,
-		plugins: config.plugins,
-		priority: config.priority
+		mapperFile: config.mapperFile || config.mappingFile,
+		placeholders: config.placeholders || config.placeholder || {}
 	});
 
     try {

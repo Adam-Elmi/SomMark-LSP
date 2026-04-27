@@ -78,26 +78,8 @@ export async function computeSemanticTokens(text) {
         }
         return tokens;
     };
-    // ========================================================================== //
-    //  3. Regex-based Highlighting (Imports & Modules)                           //
-    // ========================================================================== //
-    // 3.1 Highlight Imports: [import = alias: "file.smark" ]
-    const importRegex = /(\[\s*)(import)(\s*=\s*)([a-zA-Z0-9_-]+)(\s*:\s*)("[^"]+"|'[^']+')(\s*\])/g;
-    
-    // Highlight 'import' as keyword
-    allTokens.push(...getTokensFromRegex(importRegex, 'keyword', [], 2));
-    // Highlight 'alias' as variable (declaration)
-    allTokens.push(...getTokensFromRegex(importRegex, 'variable', ['declaration'], 4));
-    // Highlight '"file.smark"' as string
-    allTokens.push(...getTokensFromRegex(importRegex, 'string', [], 6));
-
-    // 3.2 Highlight Module Usages [$use-module = alias]
-    const usageRegex = /(\[\s*)(\$use-module)(\s*=\s*)([a-zA-Z0-9_-]+)(\s*\])/g;
-    
-    // Highlight '$use-module' as keyword
-    allTokens.push(...getTokensFromRegex(usageRegex, 'keyword', [], 2));
-    // Highlight 'alias' as variable
-    allTokens.push(...getTokensFromRegex(usageRegex, 'variable', [], 4));
+    // V4 Lexer now identifies 'import' and '$use-module' as dedicated tokens.
+    // We no longer need regex-based highlighting for these.
 
     // ========================================================================== //
     //  4. Lexer Token Collection                                                 //
@@ -111,13 +93,19 @@ export async function computeSemanticTokens(text) {
                 type = 'comment';
                 break;
             case TOKEN_TYPES.END_KEYWORD:
+            case TOKEN_TYPES.IMPORT:
+            case TOKEN_TYPES.USE_MODULE:
                 type = 'keyword';
                 modifiers.push('declaration');
                 break;
             case TOKEN_TYPES.IDENTIFIER:
                 type = 'variable';
                 break;
+            case TOKEN_TYPES.KEY:
+                type = 'parameter';
+                break;
             case TOKEN_TYPES.VALUE:
+            case TOKEN_TYPES.QUOTE:
                 type = 'string';
                 break;
             case TOKEN_TYPES.OPEN_BRACKET:
