@@ -38,6 +38,11 @@ connection.onInitialize((params) => {
 	};
 	return result;
 });
+
+connection.onDidChangeWatchedFiles((_change) => {
+	// Re-validate all open documents when configuration changes
+	documents.all().forEach(doc => validateTextDocument(connection, doc));
+});
 // ========================================================================== //
 //  4. Semantic Tokens Provider                                               //
 // ========================================================================== //
