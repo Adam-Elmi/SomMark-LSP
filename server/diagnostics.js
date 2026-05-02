@@ -1,5 +1,6 @@
 import { DiagnosticSeverity } from "vscode-languageserver/node.js";
-import SomMark, { findAndLoadConfig } from "sommark";
+import SomMark from "sommark";
+import { findAndLoadConfigFresh } from "./config.js";
 import { fileURLToPath } from "node:url";
 
 // ========================================================================== //
@@ -9,7 +10,7 @@ export async function validateTextDocument(connection, document) {
 	const text = document.getText();
 	const filename = document.uri.startsWith("file://") ? fileURLToPath(document.uri) : document.uri;
 
-	const config = await findAndLoadConfig(filename);
+	const config = await findAndLoadConfigFresh(filename);
 
 	const diagnostics = [];
 	const smark = new SomMark({
