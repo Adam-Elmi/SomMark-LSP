@@ -3,100 +3,183 @@
   "name": "SomMark",
   "scopeName": "source.sommark",
   "patterns": [
-    { "include": "#at-block-style-override" },
-    { "include": "#at-block-style-default" },
-    { "include": "#at-block-script-override" },
-    { "include": "#at-block-script-default" },
-    { "include": "#at-block-generic" },
-    { "include": "#comments" },
-    { "include": "#brackets" }
+    {
+      "include": "#at-block-style-override"
+    },
+    {
+      "include": "#at-block-style-default"
+    },
+    {
+      "include": "#at-block-script-override"
+    },
+    {
+      "include": "#at-block-script-default"
+    },
+    {
+      "include": "#at-block-generic"
+    },
+    {
+      "include": "#brackets"
+    }
   ],
   "repository": {
-    "comments": {
-      "begin": "#",
-      "end": "$",
-      "name": "comment.line.number-sign.sommark"
-    },
     "brackets": {
       "patterns": [
-        { "match": "[\\[\\](){}]", "name": "punctuation.bracket.sommark" }
+        {
+          "match": "[\\[\\](){}]",
+          "name": "punctuation.bracket.sommark"
+        }
       ]
     },
     "at-block-generic": {
       "begin": "(@_)\\s*([a-zA-Z0-9_-]+)\\s*(_@)",
       "beginCaptures": {
-        "1": { "name": "keyword.other.sommark" },
-        "2": { "name": "entity.name.tag.sommark" },
-        "3": { "name": "keyword.other.sommark" }
+        "1": {
+          "name": "keyword.other.sommark"
+        },
+        "2": {
+          "name": "entity.name.tag.sommark"
+        },
+        "3": {
+          "name": "keyword.other.sommark"
+        }
       },
       "end": "(@_)(\\s*end\\s*)(_@)",
       "endCaptures": {
-        "1": { "name": "keyword.other.sommark" },
-        "2": { "name": "keyword.control.end.sommark" },
-        "3": { "name": "keyword.other.sommark" }
+        "1": {
+          "name": "keyword.other.sommark"
+        },
+        "2": {
+          "name": "keyword.control.end.sommark"
+        },
+        "3": {
+          "name": "keyword.other.sommark"
+        }
       }
     },
     "at-block-style-override": {
       "begin": "(@_)\\s*([Ss]tyle)\\s*(_@)(\\s*(?:\\[[^\\]]*\\])?\\s*:\\s*)([a-zA-Z0-9_-]+)(\\s*;)",
       "beginCaptures": {
-          "1": { "name": "keyword.other.sommark" },
-          "2": { "name": "entity.name.tag.sommark" },
-          "3": { "name": "keyword.other.sommark" },
-          "4": { "name": "punctuation.separator.sommark" },
-          "5": { "name": "variable.parameter.sommark" },
-          "6": { "name": "punctuation.terminator.sommark" }
+        "1": {
+          "name": "keyword.other.sommark"
+        },
+        "2": {
+          "name": "entity.name.tag.sommark"
+        },
+        "3": {
+          "name": "keyword.other.sommark"
+        },
+        "4": {
+          "name": "punctuation.separator.sommark"
+        },
+        "5": {
+          "name": "variable.parameter.sommark"
+        },
+        "6": {
+          "name": "punctuation.terminator.sommark"
+        }
       },
       "end": "(@_)(\\s*end\\s*)(_@)",
       "patterns": [
-          { "include": "source.css" },
-          { "include": "source.scss" },
-          { "include": "source.sass" },
-          { "include": "source.less" },
-          { "include": "source.stylus" }
+        {
+          "include": "source.css"
+        },
+        {
+          "include": "source.scss"
+        },
+        {
+          "include": "source.sass"
+        },
+        {
+          "include": "source.less"
+        },
+        {
+          "include": "source.stylus"
+        }
       ]
     },
     "at-block-style-default": {
       "begin": "(@_)\\s*([Ss]tyle)\\s*(_@)(\\s*(?:\\[[^\\]]*\\])?\\s*;)",
       "beginCaptures": {
-          "1": { "name": "keyword.other.sommark" },
-          "2": { "name": "entity.name.tag.sommark" },
-          "3": { "name": "keyword.other.sommark" },
-          "4": { "name": "punctuation.terminator.sommark" }
+        "1": {
+          "name": "keyword.other.sommark"
+        },
+        "2": {
+          "name": "entity.name.tag.sommark"
+        },
+        "3": {
+          "name": "keyword.other.sommark"
+        },
+        "4": {
+          "name": "punctuation.terminator.sommark"
+        }
       },
       "end": "(@_)(\\s*end\\s*)(_@)",
       "patterns": [
-          { "include": "source.css" }
+        {
+          "include": "source.css"
+        }
       ]
     },
     "at-block-script-override": {
       "begin": "(@_)\\s*([Ss]cript)\\s*(_@)(\\s*(?:\\[[^\\]]*\\])?\\s*:\\s*)([a-zA-Z0-9_-]+)(\\s*;)",
       "beginCaptures": {
-          "1": { "name": "keyword.other.sommark" },
-          "2": { "name": "entity.name.tag.sommark" },
-          "3": { "name": "keyword.other.sommark" },
-          "4": { "name": "punctuation.separator.sommark" },
-          "5": { "name": "variable.parameter.sommark" },
-          "6": { "name": "punctuation.terminator.sommark" }
+        "1": {
+          "name": "keyword.other.sommark"
+        },
+        "2": {
+          "name": "entity.name.tag.sommark"
+        },
+        "3": {
+          "name": "keyword.other.sommark"
+        },
+        "4": {
+          "name": "punctuation.separator.sommark"
+        },
+        "5": {
+          "name": "variable.parameter.sommark"
+        },
+        "6": {
+          "name": "punctuation.terminator.sommark"
+        }
       },
       "end": "(@_)(\\s*end\\s*)(_@)",
       "patterns": [
-          { "include": "source.js" },
-          { "include": "source.ts" },
-          { "include": "source.js.jsx" },
-          { "include": "source.ts.tsx" }
+        {
+          "include": "source.js"
+        },
+        {
+          "include": "source.ts"
+        },
+        {
+          "include": "source.js.jsx"
+        },
+        {
+          "include": "source.ts.tsx"
+        }
       ]
     },
     "at-block-script-default": {
       "begin": "(@_)\\s*([Ss]cript)\\s*(_@)(\\s*(?:\\[[^\\]]*\\])?\\s*;)",
       "beginCaptures": {
-          "1": { "name": "keyword.other.sommark" },
-          "2": { "name": "entity.name.tag.sommark" },
-          "3": { "name": "keyword.other.sommark" },
-          "4": { "name": "punctuation.terminator.sommark" }
+        "1": {
+          "name": "keyword.other.sommark"
+        },
+        "2": {
+          "name": "entity.name.tag.sommark"
+        },
+        "3": {
+          "name": "keyword.other.sommark"
+        },
+        "4": {
+          "name": "punctuation.terminator.sommark"
+        }
       },
       "end": "(@_)(\\s*end\\s*)(_@)",
       "patterns": [
-          { "include": "source.js" }
+        {
+          "include": "source.js"
+        }
       ]
     }
   }
