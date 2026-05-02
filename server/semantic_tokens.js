@@ -35,7 +35,7 @@ export async function computeSemanticTokens(text) {
         let match;
         const typeIndex = tokenTypes.indexOf(type);
         const modifierBitmask = modifiers.reduce((mask, mod) => mask | (1 << tokenModifiers.indexOf(mod)), 0);
-        
+
         while ((match = regex.exec(text)) !== null) {
             const value = match[groupIndex];
             if (value === undefined) continue;
@@ -65,7 +65,7 @@ export async function computeSemanticTokens(text) {
                 if (lineContent.length === 0) continue;
                 const currentLine = startLine + i;
                 const tokenStart = (i === 0) ? startChar : 0;
-                
+
                 tokens.push({
                     line: currentLine,
                     char: tokenStart,
