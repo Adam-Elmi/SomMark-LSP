@@ -60,7 +60,7 @@
     "url": "https://github.com/Adam-Elmi/SomMark-LSP.git"
   },
   "dependencies": {
-    "sommark": "^4.0.0",
+    "sommark": "^4.0.3",
     "sommark-lsp": "^1.1.0",
     "vscode-languageclient": "^9.0.1"
   }
