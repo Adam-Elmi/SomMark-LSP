@@ -1,38 +1,23 @@
-# SomMark Support for Neovim (using nvim-lspconfig)
+# SomMark Support for Neovim (via nvim-lspconfig)
 
-This directory contains pre-configured files to add SomMark support to Neovim using **nvim-lspconfig**.
+This directory contains the minimal setup required to add native SomMark Language Server support to Neovim using the **nvim-lspconfig** plugin.
 
-## Files
-- [init.lua](file:///home/adam/Projects/Smark/SomMark-LSP/editors/vim/init.lua): Sample Neovim configuration.
+![SomMark in Neovim](../../screenshots/nvim.png)
 
-## Setup
+## Prerequisites
 
-1. **Install nvim-lspconfig**: Follow the instructions at [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig).
-2. **Configure Language Server**: Add the following to your Neovim configuration (`init.lua`):
+You must have [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) installed in your Neovim environment (e.g., via `lazy.nvim`, `packer`, etc.).
 
-```lua
-local lspconfig = require('lspconfig')
-local configs = require('lspconfig.configs')
+## Setup Instructions
 
-if not configs.sommark_lsp then
-  configs.sommark_lsp = {
-    default_config = {
-      cmd = { 'sommark-lsp', '--stdio' },
-      filetypes = { 'sommark', 'smark' },
-      root_dir = lspconfig.util.root_pattern('package.json', '.git'),
-      settings = {},
-    },
-  }
-end
+To configure the LSP, you simply need to add the provided snippet to your Neovim configuration file.
 
-lspconfig.sommark_lsp.setup{}
-```
+1. Open your Neovim configuration file (usually `~/.config/nvim/init.lua`).
+2. **If you use a plugin manager like `lazy.nvim`**, scroll down to the bottom of the file (or anywhere *after* your plugin manager's `setup()` block).
+3. Copy the contents of the [`sommark-lsp.lua`](sommark-lsp.lua) file from this directory and paste it into your configuration.
 
-3. **Filetype Detection**: Add this to your `init.lua` or `ftdetect/sommark.lua`:
-```lua
-vim.filetype.add({
-  extension = {
-    smark = 'sommark',
-  },
-})
-```
+The snippet does two things:
+1. **Filetype Detection**: Tells Neovim to treat `.smark` files as the `sommark` language.
+2. **LSP Configuration**: Defines the custom `sommark-lsp` server and attaches it to the `sommark` filetype natively.
+
+That's it! Restart Neovim and open any `.smark` file to see real-time diagnostics and syntax highlighting.

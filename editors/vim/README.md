@@ -1,15 +1,26 @@
-# SomMark Support for Vim (using Coc.nvim)
+# SomMark Support for Vim (via coc.nvim)
 
-This directory contains pre-configured files to add SomMark support to Vim using **coc.nvim**.
+This directory contains the minimal setup required to add full SomMark Language Server support to Vim using the **coc.nvim** plugin.
 
-## Files
-- [vimrc](file:///home/adam/Projects/Smark/SomMark-LSP/editors/vim/vimrc): Sample Vim configuration.
-- [coc-settings.json](file:///home/adam/Projects/Smark/SomMark-LSP/editors/vim/coc-settings.json): Language server configuration for coc.nvim.
+![SomMark in Vim](../../screenshots/vim.png)
 
-## Setup
+## Prerequisites
 
-1. **Install coc.nvim**: Follow the instructions at [coc.nvim](https://github.com/neoclide/coc.nvim).
-2. **Configure Language Server**: Add the contents of `coc-settings.json` to your global `coc-settings.json` (usually `:CocConfig` in Vim).
+You must have [coc.nvim](https://github.com/neoclide/coc.nvim) installed in your Vim environment.
+
+## 1. Setup Filetype Detection
+Vim needs to know that `.smark` files belong to the `sommark` language.
+
+Add the following line directly to your `~/.vimrc` file:
+```vim
+autocmd BufRead,BufNewFile *.smark set filetype=sommark
+```
+
+## 2. Configure the Language Server
+You need to tell `coc.nvim` how to launch the SomMark LSP when you open a `.smark` file.
+
+1. Open Vim and run the command `:CocConfig` to open your global `coc-settings.json` file.
+2. Add the `sommark-lsp` block to your `"languageserver"` section so that it looks like this:
 
 ```json
 {
@@ -18,15 +29,10 @@ This directory contains pre-configured files to add SomMark support to Vim using
       "command": "sommark-lsp",
       "args": ["--stdio"],
       "filetypes": ["sommark", "smark"],
-      "rootPatterns": ["package.json", ".git"]
+      "rootPatterns": ["smark.config.js", "package.json", ".git"]
     }
   }
 }
 ```
 
-3. **Filetype Detection**: Create `~/.vim/ftdetect/sommark.vim` and add:
-```vim
-autocmd BufRead,BufNewFile *.smark set filetype=sommark
-```
-
-4. **Syntax Highlighting**: Create `~/.vim/syntax/sommark.vim` for basic highlighting, or rely on semantic tokens if your client supports them.
+That's it! Restart Vim and open any `.smark` file to see real-time diagnostics and syntax highlighting.

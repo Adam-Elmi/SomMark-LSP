@@ -10,6 +10,7 @@
         "smark"
       ],
       "rootPatterns": [
+        "smark.config.js",
         "package.json",
         ".git"
       ]

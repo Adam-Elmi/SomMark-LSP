@@ -1,32 +1,35 @@
-# SomMark Language Server
+# SomMark Support for VS Code
 
-A VS Code extension for the SomMark language. It provides features like real-time diagnostics, semantic syntax highlighting, and automatic code formatting.
+This is the official SomMark Language Server extension for **Visual Studio Code**. It provides native integration with features like real-time diagnostics, semantic syntax highlighting, and automatic code formatting.
+
+![SomMark in VS Code](../../screenshots/vscode.png)
 
 ## Features
+- **Semantic Highlighting**: Accurate coloring for tags, identifiers, and block content directly from the Language Server.
+- **Real-time Diagnostics**: Instantly shows syntax errors and build failures as you type (squiggled red lines).
+- **Embedded Languages**: Beautiful syntax highlighting inside your logic blocks for JS, CSS, Python, SQL, and 70+ other languages!
 
-- **Semantic Highlighting**: Accurate coloring for tags, identifiers, and block content.
-- **Dynamic Syntax Injection**: "Borrow" syntax highlighting for 70+ languages (JavaScript, CSS, Python, SQL, etc.) inside `@_Code_@`, `@_Style_@`, and `@_Script_@` blocks.
-- **Real-time Diagnostics**: Shows syntax errors as you type.
-- **Code Formatting**: Automatic formatting for your SomMark files using the Format Document command.
+## Installation (Recommended)
 
+You can easily install this extension directly from within VS Code:
+1. Open VS Code.
+2. Open the **Extensions** view (`Ctrl+Shift+X` or `Cmd+Shift+X`).
+3. Search for **"SomMark Language Server"**.
+4. Click **Install**.
 
-## Configuration
-
-The extension works automatically without any extra settings.
-
-## Requirements
-
-- VS Code version 1.104.0 or higher.
-- Files must end with .smark.
- 
-
-## For Developers
-
-To test the extension locally:
-
-1. Open the `editors/vscode` folder in VS Code.
-2. Run `npm install` in your terminal.
-3. Press F5 to start a new window with the extension active.
+That's it! Open any `.smark` file and the Language Server will automatically boot up.
 
 ---
-Created by [Adam-Elmi](https://github.com/Adam-Elmi)
+
+## For Developers (Local Build)
+
+If you are developing the extension or want to install an unreleased version from source, you can package it locally:
+
+1. Open your terminal and navigate to this directory.
+2. Run the following commands to bundle and install the `.vsix` file:
+```bash
+cd editors/vscode
+npm install
+npx vsce package
+code --install-extension sommark-lsp-*.vsix
+```

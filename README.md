@@ -1,72 +1,61 @@
-# SomMark-LSP <img src="icons/sommark.png" width="80" align="right">
+# SomMark-LSP <img src="icons/sommark.png" width="80" align="right" alt="SomMark Logo">
 
-Language Server Protocol (LSP) implementation for the SomMark markup language.
+A high-performance Language Server Protocol (LSP) implementation designed specifically for the **SomMark** markup language. It brings modern IDE capabilities, precise diagnostics, and rich semantic highlighting to your favorite editors.
 
-## Features
-- **Diagnostics**: Accurate syntax error reporting with precise ranges.
-- **Semantic Highlighting**: Perfect token-based coloring in any editor that supports LSP Semantic Tokens (VS Code, Neovim, CoC).
-- **Easy Sharing**: Install globally to use across all editors with a single command.
+---
+
+## Key Features
+
+- **Real-time Diagnostics**: Delivers accurate syntax error reporting with exact line and character ranges.
+- **Semantic Tokens**: Provides high-fidelity, token-based coloring in editors supporting LSP semantic tokens.
+- **Zero-Config Global Install**: Simple global registration lets you spin up the server in any directory instantly.
+
+---
 
 ## Installation
 
-Go to the `SomMark-LSP` directory and install the server globally:
+Install the SomMark Language Server globally via `npm`:
 
 ```bash
 npm install -g sommark-lsp
 ```
 
-This will register the `sommark-lsp` command.
+This registers the `sommark-lsp` command on your system path.
 
-## Editor Integration
+---
 
-### Vim (coc.nvim)
-Add the following to your `coc-settings.json`:
-```json
-{
-  "languageserver": {
-    "sommark-lsp": {
-      "command": "sommark-lsp",
-      "args": ["--stdio"],
-      "filetypes": ["sommark", "smark"],
-      "rootPatterns": ["package.json", ".git"]
-    }
-  },
-  "semanticTokens.enable": true
-}
-```
-And add these to your `.vimrc`:
-```vim
-autocmd BufRead,BufNewFile *.smark set filetype=sommark
-hi link CocSemKeyword Keyword
-hi link CocSemString String
-hi link CocSemVariable Identifier
-```
+## Supported Editors
 
-### Neovim
-Use `nvim-lspconfig` or manually:
-```lua
-vim.lsp.start({
-  name = 'sommark-lsp',
-  cmd = {'sommark-lsp', '--stdio'},
-  root_dir = vim.fs.dirname(vim.fs.find({'package.json', '.git'}, { upward = true })[1]),
-})
-```
+Click on the guides below to set up **SomMark-LSP** in your preferred editor.
 
-### Helix
-Add to `~/.config/helix/languages.toml`:
-```toml
-[language-server.sommark-lsp]
-command = "sommark-lsp"
-args = ["--stdio"]
+### [VS Code](editors/vscode/README.md)
+*Seamless integration with native auto-closing pairs and premium syntax coloring.*
 
-[[language]]
-name = "sommark"
-scope = "source.sommark"
-file-types = ["smark"]
-language-servers = [ "sommark-lsp" ]
-```
-> [!NOTE]
-> Helix support is currently limited; diagnostics and some features work, but full syntax highlighting requires a Tree-sitter grammar (coming soon).
+![VS Code Screenshot](screenshots/vscode.png)
+
+---
+
+### [Neovim](editors/neovim/README.md)
+*Configuration snippet for `nvim-lspconfig` including dynamic, conflict-free auto-closing pairs.*
+
+![Neovim Screenshot](screenshots/nvim.png)
+
+---
+
+### [Vim](editors/vim/README.md)
+*Integrated with `coc.nvim` and dynamic expression-based auto-closing keys.*
+
+![Vim Screenshot](screenshots/vim.png)
+
+---
+
+### [Zed](editors/zed-sommark/README.md)
+*Native WebAssembly-based extension for the ultra-fast Zed editor.*
+
+![Zed Screenshot](screenshots/zed.png)
+
+---
 
 ## Configuration
-You can configure the LSP behavior via `smark.config.js` in your project root.
+
+You can configure LSP diagnostics and behavior by adding a `smark.config.js` file to your project root.

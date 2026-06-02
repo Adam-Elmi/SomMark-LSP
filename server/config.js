@@ -7,11 +7,9 @@ const CONFIG_FILE_NAME = "smark.config.js";
 async function loadConfigFileFresh(configPath) {
     if (!configPath) return null;
     try {
-        const content = await fs.readFile(configPath, "utf-8");
-        // Using a data URL ensures Bun/Node doesn't cache the module
-        const base64 = Buffer.from(content).toString("base64");
-        const dataURL = `data:text/javascript;base64,${base64}`;
-        const loadedModule = await import(dataURL);
+        // Append timestamp to bypass ESM module cache, while preserving file:// context for relative imports
+        const configURL = `${pathToFileURL(configPath).href}?t=${Date.now()}`;
+        const loadedModule = await import(configURL);
         return loadedModule.default || loadedModule;
     } catch (error) {
         return null;
@@ -39,13 +37,21 @@ export async function findAndLoadConfigFresh(targetPath) {
 		}
 	}
 
-	// 2. Check the Target Directory (Highest Priority)
-	if (!configPath) {
-		const targetConfig = path.join(startDir, CONFIG_FILE_NAME);
-		try {
-			await fs.access(targetConfig);
-			configPath = targetConfig;
-		} catch {
+	// 2. Check the Target Directory and its parents
+	if (!configPath && startDir) {
+		let currentDir = startDir;
+		while (currentDir) {
+			const targetConfig = path.join(currentDir, CONFIG_FILE_NAME);
+			try {
+				await fs.access(targetConfig);
+				configPath = targetConfig;
+				break; // Found it!
+			} catch {
+				// Go up one level
+				const parentDir = path.dirname(currentDir);
+				if (parentDir === currentDir) break; // Reached root
+				currentDir = parentDir;
+			}
 		}
 	}
 
