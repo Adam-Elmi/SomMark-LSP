@@ -1,6 +1,6 @@
 {
   "name": "sommark-lsp",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "bin": {
     "sommark-lsp": "server/server.js"
   },
@@ -8,13 +8,13 @@
     "server",
     "package.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "screenshots",
+    "icons"
   ],
   "description": "Language Server for SomMark",
   "scripts": {
-    "start": "node server/server.js --stdio",
-    "test": "node tests/verify_v3_3_0.js",
-    "test:file": "node tests/test_formatting.js"
+    "start": "node server/server.js --stdio"
   },
   "keywords": [
     "sommark",
