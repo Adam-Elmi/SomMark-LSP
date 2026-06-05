@@ -65,9 +65,9 @@ function runTests() {
     console.log("Test Case 7: parseSomMarkError parsing multi-line error with out of bounds coordinates");
     const errorText = "Error from line 1, column 5 to line 8, column 200";
     const diagError = parseSomMarkError(errorText, testText);
-    // Start: line 0, column 5 (within bounds of line 0 "Hello World!" length 12)
+    // Start: line 0, column 5 (within bounds of line 0 "Hello World!" length 12) -> translated to 0-indexed index 4
     // End: line 7 (clamped to 2), column 200 (clamped to line 2 "Goodbye!" length 8)
-    assert.deepStrictEqual(diagError.range.start, { line: 0, character: 5 });
+    assert.deepStrictEqual(diagError.range.start, { line: 0, character: 4 });
     assert.deepStrictEqual(diagError.range.end, { line: 2, character: 8 });
     console.log("Case 7 Passed!");
 

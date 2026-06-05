@@ -10,6 +10,10 @@ const mockDocument = {
         ID: static \${user.id}\$
         [end]
     [end]
+    static \${
+        let company = "SomMark";
+        return \`Built by \${company}\`;
+    }\$
     `,
     uri: "file:///home/adam/Projects/Smark/SomMark/debug.smark"
 };

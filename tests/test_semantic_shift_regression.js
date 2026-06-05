@@ -1,7 +1,16 @@
 import { computeSemanticTokens, tokenTypes } from '../server/semantic_tokens.js';
-import fs from 'node:fs';
 
-const text = fs.readFileSync('../SomMark/debug.smark', 'utf8');
+const text = `# Comment
+# Comment
+# Comment
+# Comment
+# Comment
+[for-each = static \${
+    const users = [ { name: "A" } ];
+    return users;
+}\$
+     as: "user"]
+`;
 
 async function test() {
     const res = await computeSemanticTokens(text);

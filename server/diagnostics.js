@@ -117,10 +117,10 @@ async function doValidate(connection, document) {
 
             for (const block of logicBlocksToValidate) {
                 if (block.code && block.code.trim()) {
-                    // First check syntax with Acorn
+                    // First check syntax with Acorn (allowing top-level return for static blocks)
                     let syntaxValid = false;
                     try {
-                        acorn.parse(block.code, { ecmaVersion: 'latest', sourceType: 'module' });
+                        acorn.parse(block.code, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
                         syntaxValid = true;
                     } catch (e) {
                         const diag = acornToLSPDiagnostic(e, block.code, block.offset, text);
@@ -202,7 +202,7 @@ function preprocessorToLSPDiagnostic(e, code, offset, fullText) {
     let targetLength = 1;
 
     try {
-        const ast = acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'module' });
+        const ast = acorn.parse(code, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
         const matches = [];
 
         function traverse(node) {
@@ -284,7 +284,12 @@ function preprocessorToLSPDiagnostic(e, code, offset, fullText) {
 
     let shortMessage = cleanError;
     if (shortMessage.includes('\n')) {
-        shortMessage = shortMessage.split('\n')[0];
+        const lines = shortMessage.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines[0] === "[Transpiler Error]:" && lines[1]) {
+            shortMessage = `${lines[0]} ${lines[1]}`;
+        } else {
+            shortMessage = lines[0];
+        }
     }
 
     return {
