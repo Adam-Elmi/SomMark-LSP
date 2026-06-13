@@ -1,6 +1,6 @@
 {
   "name": "sommark-lsp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "bin": {
     "sommark-lsp": "server/server.js"
   },
@@ -28,7 +28,7 @@
   "dependencies": {
     "acorn": "^8.15.0",
     "css-tree": "^2.3.1",
-    "sommark": "^4.3.0",
+    "sommark": "^4.5.2",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
   }
