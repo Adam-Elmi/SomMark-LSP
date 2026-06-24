@@ -167,17 +167,13 @@ export async function computeSemanticTokens(text) {
 
             if (startLine === endLine) {
                 const length = endChar - startChar;
-                if (length > 0) {
-                    allTokens.push({ line: startLine, char: startChar, length, typeIndex: tokenTypes.indexOf(type), modifierBitmask, priority: 1 });
-                }
+                allTokens.push({ line: startLine, char: startChar, length, typeIndex: tokenTypes.indexOf(type), modifierBitmask, priority: 1 });
             } else {
                 for (let l = startLine; l <= endLine; l++) {
                     const lineText = text.split('\n')[l] || '';
                     const char = (l === startLine) ? startChar : 0;
                     const length = (l === endLine) ? endChar - char : lineText.length - char;
-                    if (length > 0) {
-                        allTokens.push({ line: l, char, length, typeIndex: tokenTypes.indexOf(type), modifierBitmask, priority: 1 });
-                    }
+                    allTokens.push({ line: l, char, length, typeIndex: tokenTypes.indexOf(type), modifierBitmask, priority: 1 });
                 }
             }
         }
