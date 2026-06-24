@@ -6,7 +6,14 @@ This directory contains the minimal setup required to add native SomMark Languag
 
 ## Prerequisites
 
-You must have [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) installed in your Neovim environment (e.g., via `lazy.nvim`, `packer`, etc.).
+- **Node.js** — required to run the language server
+- **sommark-lsp** — install globally:
+
+```bash
+npm install -g sommark-lsp
+```
+
+- **[nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)** — installed via `lazy.nvim`, `packer`, etc.
 
 ## Setup Instructions
 

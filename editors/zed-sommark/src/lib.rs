@@ -9,15 +9,16 @@ impl zed::Extension for SomMarkExtension {
 
     fn language_server_command(
         &mut self,
-        _config: &zed::LanguageServerId,
-        _worktree: &zed::Worktree,
+        _language_server_id: &zed::LanguageServerId,
+        worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
+        let server = worktree
+            .which("sommark-lsp")
+            .ok_or_else(|| "sommark-lsp not found — run: npm install -g sommark-lsp".to_string())?;
+
         Ok(zed::Command {
-            command: "/usr/bin/node".to_string(),
-            args: vec![
-                "/home/adam/Projects/SomMark-LSP/server/server.js".to_string(),
-                "--stdio".to_string(),
-            ],
+            command: server,
+            args: vec!["--stdio".to_string()],
             env: Default::default(),
         })
     }

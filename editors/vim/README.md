@@ -6,7 +6,14 @@ This directory contains the minimal setup required to add full SomMark Language 
 
 ## Prerequisites
 
-You must have [coc.nvim](https://github.com/neoclide/coc.nvim) installed in your Vim environment.
+- **Node.js** — required to run the language server
+- **sommark-lsp** — install globally:
+
+```bash
+npm install -g sommark-lsp
+```
+
+- **[coc.nvim](https://github.com/neoclide/coc.nvim)** — Vim LSP client
 
 ## 1. Setup Filetype Detection
 Vim needs to know that `.smark` files belong to the `sommark` language.
