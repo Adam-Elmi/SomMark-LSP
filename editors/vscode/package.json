@@ -2,7 +2,7 @@
   "name": "sommark-lsp",
   "displayName": "SomMark Language Server",
   "description": "Real-time diagnostics, code formatting, and semantic highlighting for SomMark files.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "Adam-Elmi",
   "engines": {
     "vscode": "^1.104.0"
@@ -40,8 +40,8 @@
     "url": "https://github.com/Adam-Elmi/SomMark-LSP.git"
   },
   "dependencies": {
-    "sommark": "^5.0.1",
-    "sommark-lsp": "^2.0.0",
+    "sommark": "^5.0.3",
+    "sommark-lsp": "^2.0.1",
     "vscode-languageclient": "^9.0.1"
   }
 }
