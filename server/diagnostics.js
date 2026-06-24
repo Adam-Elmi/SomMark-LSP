@@ -1,10 +1,10 @@
 import { DiagnosticSeverity } from "vscode-languageserver/node.js";
 import SomMark, { preprocessRuntimeLogic } from "sommark";
 import { findAndLoadConfigFresh } from "./config.js";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
+import fs from "node:fs/promises";
 import * as acorn from 'acorn';
-import * as csstree from 'css-tree';
 
 // ========================================================================== //
 //  1. Document Validation Logic                                              //
@@ -42,11 +42,39 @@ export async function validateTextDocument(connection, document) {
     }
 }
 
+async function findLSPConfig(filename) {
+    let currentDir = path.dirname(filename);
+    while (currentDir) {
+        const configPath = path.join(currentDir, 'sommark.lsp.js');
+        try {
+            return await fs.readFile(configPath, 'utf8');
+        } catch {
+            const parent = path.dirname(currentDir);
+            if (parent === currentDir) break;
+            currentDir = parent;
+        }
+    }
+    return null;
+}
+
+function buildGlobalsPreamble(lspConfigContent) {
+    if (!lspConfigContent || !lspConfigContent.trim()) return '';
+    try {
+        const ast = acorn.parse(lspConfigContent, { ecmaVersion: 'latest', sourceType: 'module' });
+        if (!ast.body || ast.body.length === 0) return '';
+    } catch {
+        return '';
+    }
+    const body = lspConfigContent.replace(/export\s+default/, '').replace(/;\s*$/, '');
+    return `Object.assign(globalThis, (${body}));\n`;
+}
+
 async function doValidate(connection, document) {
     const text = document.getText();
     const filename = document.uri.startsWith("file://") ? fileURLToPath(document.uri) : document.uri;
 
     const config = await findAndLoadConfigFresh(filename);
+    const globalsPreamble = buildGlobalsPreamble(await findLSPConfig(filename));
     const diagnostics = [];
 
     // 1. SomMark Structural Validation
@@ -133,13 +161,14 @@ async function doValidate(connection, document) {
                             if (block.loopVars && block.loopVars.length > 0) {
                                 const mockVars = {};
                                 for (const v of block.loopVars) {
-                                    mockVars[v] = {}; // Mock empty object so property accesses (e.g. user.username) do not crash
+                                    mockVars[v] = {};
                                 }
                                 Evaluator.inject(mockVars);
                             }
-                            await Evaluator.execute(block.code);
+                            await Evaluator.execute(globalsPreamble + block.code);
                         } catch (e) {
-                            const diag = quickJSToLSPDiagnostic(e, block.code, block.offset, text);
+                            const preambleLines = (globalsPreamble.match(/\n/g) || []).length;
+                            const diag = quickJSToLSPDiagnostic(e, block.code, block.offset, text, preambleLines);
                             if (diag) diagnostics.push(diag);
                         }
                     }
@@ -158,22 +187,6 @@ async function doValidate(connection, document) {
         } finally {
             // ALWAYS destroy and clean up the Evaluator VM instance at the end of the validation cycle
             Evaluator.destroy();
-        }
-    }
-
-    // 4. Embedded CSS Validation
-    const cssRegex = /@_(?:style|css)_@(?:;\s*)?([\s\S]*?)@_end_@/g;
-    let match;
-    while ((match = cssRegex.exec(text)) !== null) {
-        const cssCode = match[1];
-        const offset = match.index + match[0].indexOf(cssCode);
-        if (cssCode && cssCode.trim()) {
-            try {
-                csstree.parse(cssCode);
-            } catch (e) {
-                const diag = csstreeToLSPDiagnostic(e, cssCode, offset, text);
-                if (diag) diagnostics.push(diag);
-            }
         }
     }
 
@@ -297,16 +310,6 @@ function preprocessorToLSPDiagnostic(e, code, offset, fullText) {
         range: clampRange(fullText, startPos.line, startPos.character, endPos.line, endPos.character),
         message: shortMessage,
         source: 'sommark-preprocessor'
-    };
-}
-
-function csstreeToLSPDiagnostic(e, code, offset, fullText) {
-    const startPos = offsetToPosition(fullText, offset + (e.offset || 0));
-    return {
-        severity: DiagnosticSeverity.Error,
-        range: clampRange(fullText, startPos.line, startPos.character, startPos.line, startPos.character + 1),
-        message: `[CSS Error]: ${e.message}`,
-        source: 'css-tree'
     };
 }
 
@@ -456,18 +459,24 @@ export function parseSomMarkWarning(w, text) {
     };
 }
 
-function quickJSToLSPDiagnostic(e, code, offset, fullText) {
+function quickJSToLSPDiagnostic(e, code, offset, fullText, preambleLines = 0) {
     let startPos;
     if (e.line !== undefined) {
-        // QuickJS line is 1-indexed.
-        const lines = code.split('\n');
-        let relativeOffset = 0;
-        for (let i = 0; i < e.line - 1; i++) {
-            if (lines[i] !== undefined) relativeOffset += lines[i].length + 1;
+        // QuickJS line is 1-indexed and relative to the full executed code
+        // (preamble + block.code). Subtract preamble lines to get the position
+        // within block.code only.
+        const codeRelativeLine = e.line - preambleLines;
+        if (codeRelativeLine < 1) {
+            startPos = offsetToPosition(fullText, offset);
+        } else {
+            const lines = code.split('\n');
+            let relativeOffset = 0;
+            for (let i = 0; i < codeRelativeLine - 1; i++) {
+                if (lines[i] !== undefined) relativeOffset += lines[i].length + 1;
+            }
+            relativeOffset += (e.column !== undefined ? e.column - 1 : 0);
+            startPos = offsetToPosition(fullText, offset + relativeOffset);
         }
-        relativeOffset += (e.column !== undefined ? e.column - 1 : 0);
-
-        startPos = offsetToPosition(fullText, offset + relativeOffset);
     } else {
         startPos = offsetToPosition(fullText, offset);
     }

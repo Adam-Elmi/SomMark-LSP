@@ -24,18 +24,6 @@ export function getVirtualJSContent(text) {
 
         if (t.type === TOKEN_TYPES.LOGIC) {
             jsCode = t.value || "";
-        } else if (t.type === TOKEN_TYPES.PREFIX_JS) {
-            jsCode = (t.value || "").slice(3, -1); // Remove js{ and }
-            startPos = { 
-                line: t.range.start.line, 
-                character: t.range.start.character + 3 
-            };
-        } else if (t.type === TOKEN_TYPES.STATIC_KEYWORD) {
-            // Check if next token is LOGIC
-            const nextT = lexerTokens[lexerTokens.indexOf(t) + 1];
-            if (nextT && nextT.type === TOKEN_TYPES.LOGIC) {
-                // Handled in LOGIC case
-            }
         }
 
         if (jsCode) {

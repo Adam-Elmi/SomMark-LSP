@@ -13,9 +13,9 @@ impl zed::Extension for SomMarkExtension {
         _worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
         Ok(zed::Command {
-            command: "/home/adam/.config/nvm/versions/node/v24.13.1/bin/node".to_string(),
+            command: "/usr/bin/node".to_string(),
             args: vec![
-                "/home/adam/Projects/Smark/SomMark-LSP/server/server.js".to_string(),
+                "/home/adam/Projects/SomMark-LSP/server/server.js".to_string(),
                 "--stdio".to_string(),
             ],
             env: Default::default(),

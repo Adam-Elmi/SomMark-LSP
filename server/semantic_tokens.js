@@ -1,82 +1,46 @@
 import { SemanticTokensBuilder } from 'vscode-languageserver/node.js';
 import { TOKEN_TYPES, lexSync } from 'sommark';
 import * as acorn from 'acorn';
-import * as csstree from 'css-tree';
 
 // ========================================================================== //
 //  1. Semantic Tokens Legend                                                 //
 // ========================================================================== //
 export const tokenTypes = [
-    'keyword',     // Standard keywords
-    'variable',    // Identifiers
-    'property',    // Object properties, CSS properties
-    'parameter',   // Function parameters
-    'string',      // Strings
+    'keyword',     // Structural keywords
+    'variable',    // Identifiers / variables
+    'property',    // Props and keys
+    'parameter',   // Parameters
+    'string',      // Quoted string values
     'comment',     // Comments
-    'operator',    // Operators
+    'operator',    // Operators and punctuation
     'punctuation', // Brackets, colons, etc.
     'function',    // Function names
     'method',      // Method names
-    'number',      // Numbers
+    'number',      // Number literals
     'type',        // Types, CSS tags
-    'class',       // Classes, SomMark IDs
-    'macro'        // Macros
+    'class',       // Block identifiers
+    'macro',       // Logic block markers (${ }$)
 ];
 export const tokenModifiers = ['declaration', 'documentation', 'static', 'abstract'];
 
-export const legend = {
-    tokenTypes,
-    tokenModifiers
-};
+export const legend = { tokenTypes, tokenModifiers };
 
 // ========================================================================== //
-//  2. Main Highlighting Logic                                                //
+//  2. Position Helpers                                                       //
 // ========================================================================== //
 
-function offsetToPosition(text, offset) {
-    const textBefore = text.slice(0, offset);
-    const linesBefore = textBefore.split('\n');
-    return {
-        line: linesBefore.length - 1,
-        character: linesBefore[linesBefore.length - 1].length
-    };
+function positionToOffset(text, line, character) {
+    const lines = text.split('\n');
+    let offset = 0;
+    for (let i = 0; i < line && i < lines.length; i++) {
+        offset += lines[i].length + 1; // +1 for \n
+    }
+    return offset + character;
 }
 
-function correctLexerTokens(lexerTokens, text) {
-    const logicRegex = /(\$\{)([\s\S]*?)(\}\$)/g;
-    const logicBlocks = [];
-    let match;
-    while ((match = logicRegex.exec(text)) !== null) {
-        const startPos = offsetToPosition(text, match.index);
-        const endPos = offsetToPosition(text, match.index + match[0].length);
-        logicBlocks.push({
-            start: startPos,
-            end: endPos,
-            isSingleLine: startPos.line === endPos.line
-        });
-    }
-
-    for (const t of lexerTokens) {
-        if (!t.range || !t.range.start || !t.range.end) continue;
-
-        const line = t.range.start.line;
-        let totalShift = 0;
-        for (const block of logicBlocks) {
-            if (block.end.line === line) {
-                const shiftIntroduced = block.isSingleLine ? 4 : 2;
-                const reportedEndChar = block.end.character - shiftIntroduced;
-                if (t.range.start.character >= reportedEndChar) {
-                    totalShift += shiftIntroduced;
-                }
-            }
-        }
-
-        if (totalShift > 0) {
-            t.range.start.character += totalShift;
-            t.range.end.character += totalShift;
-        }
-    }
-}
+// ========================================================================== //
+//  3. Main Highlighting Logic                                                //
+// ========================================================================== //
 
 export async function computeSemanticTokens(text) {
     const builder = new SemanticTokensBuilder();
@@ -84,147 +48,153 @@ export async function computeSemanticTokens(text) {
 
     try {
         lexerTokens = lexSync(text) || [];
-        correctLexerTokens(lexerTokens, text);
     } catch (e) {
         console.error("[Highlighting Error]:", e.message);
     }
 
     const allTokens = [];
-
-    // ========================================================================== //
-    //  3. Collect JS/CSS sections using Regex                                   //
-    // ========================================================================== //
     const sections = [];
+    let inPVPrefix = false;
+    let prevNonWs = null;
 
-    // JS Blocks: @_script_@ ... @_end_@ or @_js_@ ... @_end_@
-    const jsRegex = /@_(?:script|js)_@(?:;\s*)?([\s\S]*?)@_end_@/g;
-    let match;
-    while ((match = jsRegex.exec(text)) !== null) {
-        const content = match[1];
-        if (content && content.trim()) {
-            sections.push({
-                startOffset: match.index + match[0].indexOf(content),
-                content,
-                grammar: 'javascript'
-            });
-        }
-    }
-
-    // Prefix JS: js{ ... }
-    const prefixJsRegex = /js\{([\s\S]*?)\}/g;
-    while ((match = prefixJsRegex.exec(text)) !== null) {
-        const content = match[1];
-        if (content && content.trim()) {
-            sections.push({ startOffset: match.index + 3, content, grammar: 'javascript' });
-        }
-    }
-
-    // Logic Blocks: ${ ... }$
-    const logicRegex = /(\$\{)([\s\S]*?)(\}\$)/g;
-    while ((match = logicRegex.exec(text)) !== null) {
-        const startMarker = match[1];
-        const content = match[2];
-        const endMarker = match[3];
-
-        addManualToken(allTokens, match.index, match.index + 2, text, 'macro', 4);
-        addManualToken(allTokens, match.index + match[0].length - 2, match.index + match[0].length, text, 'macro', 4);
-
-        if (content && content.trim()) {
-            sections.push({ startOffset: match.index + 2, content, grammar: 'javascript' });
-        }
-    }
-
-    // CSS Blocks: @_style_@ ... @_end_@ or @_css_@ ... @_end_@
-    const cssRegex = /@_(?:style|css)_@(?:;\s*)?([\s\S]*?)@_end_@/g;
-    while ((match = cssRegex.exec(text)) !== null) {
-        const content = match[1];
-        if (content && content.trim()) {
-            sections.push({
-                startOffset: match.index + match[0].indexOf(content),
-                content,
-                grammar: 'css'
-            });
-        }
-    }
-
-    // ========================================================================== //
-    //  4. Process Lexer Tokens (Structural)                                     //
-    // ========================================================================== //
+    // ======================================================================== //
+    //  4. Process Lexer Tokens                                                 //
+    // ======================================================================== //
     for (let i = 0; i < lexerTokens.length; i++) {
         const t = lexerTokens[i];
         let type = null;
         let modifiers = [];
 
         switch (t.type) {
-            case TOKEN_TYPES.COMMENT: case TOKEN_TYPES.COMMENT_BLOCK: type = 'comment'; break;
-            case TOKEN_TYPES.IMPORT: case TOKEN_TYPES.USE_MODULE: case TOKEN_TYPES.END_KEYWORD:
-            case TOKEN_TYPES.FOR_EACH: case TOKEN_TYPES.SLOT_KEYWORD: case TOKEN_TYPES.GLOBAL_KEYWORD:
-                type = 'keyword'; modifiers.push('declaration'); break;
-            case TOKEN_TYPES.STATIC_KEYWORD: case TOKEN_TYPES.RUNTIME_KEYWORD: {
-                let isLogic = false;
-                for (let j = i + 1; j < lexerTokens.length; j++) {
-                    const nextToken = lexerTokens[j];
-                    if (nextToken.type === TOKEN_TYPES.WHITESPACE || 
-                        nextToken.type === TOKEN_TYPES.COMMENT || 
-                        nextToken.type === TOKEN_TYPES.COMMENT_BLOCK ||
-                        (nextToken.type === TOKEN_TYPES.TEXT && nextToken.value.trim() === '')) {
-                        continue;
-                    }
-                    if (nextToken.type === TOKEN_TYPES.LOGIC) {
-                        isLogic = true;
-                    }
-                    break;
-                }
-                if (isLogic) {
-                    type = 'keyword'; modifiers.push('declaration');
+            case TOKEN_TYPES.COMMENT:
+            case TOKEN_TYPES.COMMENT_BLOCK:
+                type = 'comment';
+                break;
+
+            case TOKEN_TYPES.IMPORT:
+            case TOKEN_TYPES.USE_MODULE:
+            case TOKEN_TYPES.END_KEYWORD:
+            case TOKEN_TYPES.FOR_EACH:
+            case TOKEN_TYPES.SLOT_KEYWORD:
+                type = 'keyword';
+                modifiers.push('declaration');
+                break;
+
+            case TOKEN_TYPES.STATIC_KEYWORD:
+            case TOKEN_TYPES.RUNTIME_KEYWORD:
+                type = 'keyword';
+                modifiers.push('declaration');
+                break;
+
+            case TOKEN_TYPES.LOGIC_OPEN:
+            case TOKEN_TYPES.LOGIC_CLOSE:
+                type = 'macro';
+                break;
+
+            case TOKEN_TYPES.LOGIC: {
+                const startOffset = positionToOffset(text, t.range.start.line, t.range.start.character);
+                sections.push({ startOffset, content: t.value, grammar: 'javascript' });
+                break;
+            }
+
+            case TOKEN_TYPES.IDENTIFIER:
+                type = 'class';
+                break;
+
+            case TOKEN_TYPES.KEY:
+                if (inPVPrefix) type = 'variable';
+                else if (prevNonWs === TOKEN_TYPES.QUOTE) type = 'string';
+                else type = 'property';
+                break;
+
+            case TOKEN_TYPES.QUOTE:
+                type = 'string';
+                break;
+
+            case TOKEN_TYPES.VALUE: {
+                if (prevNonWs === TOKEN_TYPES.QUOTE) {
+                    type = 'string';
+                } else {
+                    const v = t.value.trim();
+                    if (v === 'null') type = 'keyword';
+                    else if (v === 'true' || v === 'false') type = 'keyword';
+                    else if (v !== '' && !isNaN(v)) type = 'number';
                 }
                 break;
             }
-            case TOKEN_TYPES.IDENTIFIER: case TOKEN_TYPES.BLOCK_ID: type = 'class'; break;
-            case TOKEN_TYPES.KEY: type = 'property'; break;
-            case TOKEN_TYPES.VALUE: case TOKEN_TYPES.QUOTE: type = 'string'; break;
-            case TOKEN_TYPES.LOGIC:
-                // Markers are now handled by regex loop for better reliability
+
+            case TOKEN_TYPES.PREFIX_P:
+            case TOKEN_TYPES.PREFIX_V:
+                type = 'keyword';
                 break;
-            case TOKEN_TYPES.OPEN_BRACKET: case TOKEN_TYPES.CLOSE_BRACKET: case TOKEN_TYPES.THIN_ARROW:
-            case TOKEN_TYPES.OPEN_AT: case TOKEN_TYPES.CLOSE_AT: case TOKEN_TYPES.OPEN_PAREN: case TOKEN_TYPES.CLOSE_PAREN:
-                type = 'keyword'; break;
-            case TOKEN_TYPES.EXCLAMATION_MARK: case TOKEN_TYPES.COLON: case TOKEN_TYPES.COMMA:
-            case TOKEN_TYPES.SEMICOLON: case TOKEN_TYPES.EQUAL: case TOKEN_TYPES.ESCAPE:
-                type = 'operator'; break;
+
+            case TOKEN_TYPES.PREFIX_OPEN:
+                inPVPrefix = true;
+                type = 'keyword';
+                break;
+
+            case TOKEN_TYPES.PREFIX_CLOSE:
+                inPVPrefix = false;
+                type = 'keyword';
+                break;
+
+            case TOKEN_TYPES.ESCAPE:
+            case TOKEN_TYPES.EXCLAMATION_MARK:
+                type = 'macro';
+                break;
+
+            case TOKEN_TYPES.PIPELINE:
+            case TOKEN_TYPES.COLON:
+            case TOKEN_TYPES.COMMA:
+            case TOKEN_TYPES.EQUAL:
+                type = 'operator';
+                break;
+
+            case TOKEN_TYPES.OPEN_BRACKET:
+            case TOKEN_TYPES.CLOSE_BRACKET:
+                type = 'keyword';
+                break;
         }
 
+        if (t.type !== TOKEN_TYPES.WHITESPACE) prevNonWs = t.type;
+
         if (type) {
-            const lines = (t.value || "").split('\n');
-            for (let i = 0; i < lines.length; i++) {
-                const lineContent = lines[i];
-                if (lineContent.length === 0) continue;
-                allTokens.push({
-                    line: t.range.start.line + i,
-                    char: (i === 0) ? t.range.start.character : 0,
-                    length: lineContent.length,
-                    typeIndex: tokenTypes.indexOf(type),
-                    modifierBitmask: modifiers.reduce((mask, mod) => mask | (1 << tokenModifiers.indexOf(mod)), 0),
-                    priority: 1
-                });
+            const startLine = t.range.start.line;
+            const startChar = t.range.start.character;
+            const endLine = t.range.end.line;
+            const endChar = t.range.end.character;
+            const modifierBitmask = modifiers.reduce((mask, mod) => mask | (1 << tokenModifiers.indexOf(mod)), 0);
+
+            if (startLine === endLine) {
+                const length = endChar - startChar;
+                if (length > 0) {
+                    allTokens.push({ line: startLine, char: startChar, length, typeIndex: tokenTypes.indexOf(type), modifierBitmask, priority: 1 });
+                }
+            } else {
+                for (let l = startLine; l <= endLine; l++) {
+                    const lineText = text.split('\n')[l] || '';
+                    const char = (l === startLine) ? startChar : 0;
+                    const length = (l === endLine) ? endChar - char : lineText.length - char;
+                    if (length > 0) {
+                        allTokens.push({ line: l, char, length, typeIndex: tokenTypes.indexOf(type), modifierBitmask, priority: 1 });
+                    }
+                }
             }
         }
     }
 
-    // ========================================================================== //
-    //  5. Manual Highlighting (Acorn for JS, CSS-Tree for CSS)                  //
-    // ========================================================================== //
+    // ======================================================================== //
+    //  5. JS Highlighting (Acorn)                                              //
+    // ======================================================================== //
     for (const section of sections) {
         if (section.grammar === 'javascript') {
             highlightJS(section.content, section.startOffset, text, allTokens);
-        } else if (section.grammar === 'css') {
-            highlightCSS(section.content, section.startOffset, text, allTokens);
         }
     }
 
-    // ========================================================================== //
-    //  6. Post-Processing                                                       //
-    // ========================================================================== //
+    // ======================================================================== //
+    //  6. Post-Processing                                                      //
+    // ======================================================================== //
     allTokens.sort((a, b) => {
         if (a.line !== b.line) return a.line - b.line;
         if (a.char !== b.char) return a.char - b.char;
@@ -240,7 +210,8 @@ export async function computeSemanticTokens(text) {
             if (other.line === token.line && other.priority > token.priority) {
                 const tokenEnd = token.char + token.length;
                 if (other.char < tokenEnd && (other.char + other.length) > token.char) {
-                    eclipsed = true; break;
+                    eclipsed = true;
+                    break;
                 }
             }
         }
@@ -261,12 +232,11 @@ export async function computeSemanticTokens(text) {
 }
 
 // ========================================================================== //
-//  Internal Lexer Mappings                                                   //
+//  7. JS Highlighter (Acorn)                                                 //
 // ========================================================================== //
 
 function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
     try {
-        // We use a regular array to peek ahead
         const tokens = Array.from(acorn.tokenizer(code, {
             ecmaVersion: 'latest',
             sourceType: 'module',
@@ -283,7 +253,7 @@ function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
             const next = tokens[i + 1];
             const prev = tokens[i - 1];
 
-            // Detect and recursively highlight SomMark.static("...") or SomMark.static(`...`)
+            // Recursively highlight SomMark.static("...") or SomMark.static(`...`)
             const isSomMarkStatic = (
                 token.type.label === 'name' &&
                 token.value === 'SomMark' &&
@@ -305,7 +275,6 @@ function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
                         innerCode = code.slice(templateToken.start, templateToken.end);
                         innerStart = templateToken.start;
                     }
-
                     if (innerCode !== null) {
                         highlightJS(innerCode, innerStart + startOffset, fullText, allTokens, priority + 1);
                     }
@@ -315,60 +284,33 @@ function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
             let type = null;
             const label = token.type.label;
 
-            // 1. Keywords
             if (token.type.keyword) {
                 const name = code.slice(token.start, token.end);
-                if (['const', 'let', 'var', 'class', 'function', 'this', 'new'].includes(name)) {
-                    type = 'macro';
-                } else {
-                    type = 'keyword';
-                }
-            }
-            // 2. Identifiers with Context
-            else if (label === 'name') {
+                type = ['const', 'let', 'var', 'class', 'function', 'this', 'new'].includes(name) ? 'macro' : 'keyword';
+            } else if (label === 'name') {
                 const name = code.slice(token.start, token.end);
-
-                // Function call or method: foo( or obj.method(
-                if (next && next.type.label === '(') {
-                    if (prev && prev.type.label === 'new') {
-                        type = 'class';
-                    } else if (/^[A-Z]/.test(name)) {
-                        type = name === name.toUpperCase() ? 'variable' : 'class';
-                    } else {
-                        type = 'function';
-                    }
-                }
-                // Class or Function Declaration
-                else if (prev && prev.type.label === 'class') type = 'class';
+                if (['const', 'let', 'var'].includes(name)) {
+                    type = 'macro';
+                } else if (next && next.type.label === '(') {
+                    type = prev && prev.type.label === 'new' ? 'class' : /^[A-Z]/.test(name) ? (name === name.toUpperCase() ? 'variable' : 'class') : 'function';
+                } else if (prev && prev.type.label === 'class') type = 'class';
                 else if (prev && prev.type.label === 'function') type = 'function';
-                // Property access: obj.prop or { prop: val }
                 else if (prev && prev.type.label === '.') type = 'property';
                 else if (next && next.type.label === ':') type = 'property';
-                // Contextual keywords (like 'from' in import)
-                else if (name === 'from' || name === 'of' || name === 'as' || name === 'async' || name === 'await' || name === 'get' || name === 'set') {
-                    type = 'keyword';
-                }
-                // TitleCase (Class/Constructor) or UPPER_CASE (Constant)
-                else if (/^[A-Z]/.test(name)) {
-                    type = name === name.toUpperCase() ? 'variable' : 'class';
-                }
-                else {
-                    type = 'variable';
-                }
-            }
-            // 3. Literals
-            else if (label === 'string' || label === 'template' || label === 'regexp') {
+                else if (['from', 'of', 'as', 'async', 'await', 'get', 'set', 'undefined'].includes(name)) type = 'keyword';
+                else if (/^[A-Z]/.test(name)) type = name === name.toUpperCase() ? 'variable' : 'class';
+                else type = 'variable';
+            } else if (label === 'string' || label === 'template' || label === 'regexp' || label === '`') {
                 type = 'string';
-            }
-            else if (label === 'num') {
+            } else if (label === 'num') {
                 type = 'number';
-            }
-            // 4. Operators
-            else if (token.type.isAssign || label === 'operator' || label === 'prefix' || label === 'postfix' || ['?', ':', '??', '?.'].includes(label)) {
+            } else if (label === 'privateId') {
+                type = 'property';
+            } else if (label === '${') {
+                type = 'macro';
+            } else if (token.type.isAssign || label === 'operator' || label === 'prefix' || label === 'postfix' || ['?', ':', '??', '?.'].includes(label)) {
                 type = 'operator';
-            }
-            // 5. Punctuators
-            else if (['(', ')', '{', '}', '[', ']', ',', ';', '.', '...'].includes(label)) {
+            } else if (['(', ')', '{', '}', '[', ']', ',', ';', '.', '...'].includes(label)) {
                 type = 'punctuation';
             }
 
@@ -378,43 +320,6 @@ function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
         }
     } catch (e) {
         // Silently ignore JS parse errors for highlighting
-    }
-}
-
-function highlightCSS(code, startOffset, fullText, allTokens) {
-    try {
-        const tokens = csstree.tokenize(code);
-        csstree.walk(csstree.parse(code), {
-            enter: (node) => {
-                let type = null;
-                if (node.type === 'Identifier') {
-                    // Check if it looks like a property
-                    type = 'variable';
-                } else if (node.type === 'TypeSelector') {
-                    type = 'type';
-                } else if (node.type === 'IdSelector') {
-                    type = 'class';
-                } else if (node.type === 'ClassSelector') {
-                    type = 'class';
-                } else if (node.type === 'Declaration') {
-                    // Property is handled by identifier mapping inside declaration
-                } else if (node.type === 'Number') {
-                    type = 'number';
-                } else if (node.type === 'String') {
-                    type = 'string';
-                } else if (node.type === 'Function') {
-                    type = 'function';
-                } else if (node.type === 'Atrule') {
-                    type = 'keyword';
-                }
-
-                if (type && node.loc) {
-                    addManualToken(allTokens, node.loc.start.offset + startOffset, node.loc.end.offset + startOffset, fullText, type, 3);
-                }
-            }
-        });
-    } catch (e) {
-        // Silently ignore CSS parse errors
     }
 }
 
@@ -431,7 +336,6 @@ function addManualToken(allTokens, startOffset, endOffset, fullText, type, prior
     for (let i = 0; i < tokenLines.length; i++) {
         const lineContent = tokenLines[i];
         if (lineContent.length === 0) continue;
-
         allTokens.push({
             line: startLine + i,
             char: (i === 0) ? startChar : 0,
@@ -442,6 +346,3 @@ function addManualToken(allTokens, startOffset, endOffset, fullText, type, prior
         });
     }
 }
-
-// Compatibility export
-export function initializeHighlighter() { }
