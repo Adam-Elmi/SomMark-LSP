@@ -76,6 +76,14 @@ async function doValidate(connection, document) {
     const config = await findAndLoadConfigFresh(filename);
     const globalsPreamble = buildGlobalsPreamble(await findLSPConfig(filename));
     const diagnostics = [];
+    const projectRoot = config.resolvedConfigPath
+        ? path.dirname(config.resolvedConfigPath)
+        : path.dirname(filename);
+
+    const importAliases = {};
+    for (const [key, value] of Object.entries(config.importAliases || {})) {
+        importAliases[key] = path.isAbsolute(value) ? value : path.resolve(projectRoot, value);
+    }
 
     // 1. SomMark Structural Validation
     const smark = new SomMark({
@@ -83,7 +91,8 @@ async function doValidate(connection, document) {
         format: config.format || "html",
         filename: filename,
         mapperFile: config.mapperFile || config.mappingFile,
-        placeholders: config.placeholders || config.placeholder || {}
+        placeholders: config.placeholders || config.placeholder || {},
+        importAliases
     });
 
     let ast = null;
