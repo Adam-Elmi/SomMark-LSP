@@ -43,10 +43,9 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.keymap.set("i", '"', '""<Left>', opts)
     vim.keymap.set("i", "'", "''<Left>", opts)
     vim.keymap.set("i", "`", "``<Left>", opts)
-    
+
     -- Custom Multi-Character Pairs
     vim.keymap.set("i", "${", "${}$<Left><Left>", opts)
-    vim.keymap.set("i", "@_", "@_ _@<Left><Left><Left>", opts)
     vim.keymap.set("i", "###", "###  ###<Left><Left><Left><Left>", opts)
   end,
 })

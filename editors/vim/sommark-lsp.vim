@@ -14,7 +14,7 @@ function! SomMarkCloseCurly()
     return "{}\<Left>"
   endif
 endfunction
-z
+
 " Native Auto-Closing Pairs for SomMark (No plugins required)
 augroup SomMarkAutoClose
   autocmd!
@@ -24,9 +24,8 @@ augroup SomMarkAutoClose
   autocmd FileType sommark inoremap <buffer> " ""<Left>
   autocmd FileType sommark inoremap <buffer> ' ''<Left>
   autocmd FileType sommark inoremap <buffer> ` ``<Left>
-  
+
   " Custom Multi-Character Pairs
-  autocmd FileType sommark inoremap <buffer> @_ @_ _@<Left><Left><Left>
   autocmd FileType sommark inoremap <buffer> ### ###  ###<Left><Left><Left><Left>
 augroup END
 
