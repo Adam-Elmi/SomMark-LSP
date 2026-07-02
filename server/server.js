@@ -17,6 +17,8 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { fileURLToPath } from "node:url";
 import { validateTextDocument } from "./diagnostics.js";
 import { legend, computeSemanticTokens } from "./semantic_tokens.js";
+import { formatDocument } from "./formatting.js";
+import { getCompletions } from "./completions.js";
 import path from 'path';
 
 // ========================================================================== //
@@ -40,6 +42,10 @@ connection.onInitialize((_params) => {
 			semanticTokensProvider: {
 				legend: legend,
 				full: true
+			},
+			documentFormattingProvider: true,
+			completionProvider: {
+				triggerCharacters: ["[", ",", " ", ":"]
 			}
 		}
 	};
@@ -56,16 +62,9 @@ documents.onDidOpen((event) => {
 // ========================================================================== //
 //  4. Semantic Tokens Provider                                               //
 // ========================================================================== //
-connection.languages.semanticTokens.on(async (params) => {
+connection.languages.semanticTokens.on((params) => {
 	if (!params.textDocument.uri.endsWith(".smark")) return { data: [] };
-	let document = documents.get(params.textDocument.uri);
-	if (!document) {
-		for (let i = 0; i < 10; i++) {
-			await new Promise(resolve => setTimeout(resolve, 50));
-			document = documents.get(params.textDocument.uri);
-			if (document) break;
-		}
-	}
+	const document = documents.get(params.textDocument.uri);
 	if (!document) return { data: [] };
 	return computeSemanticTokens(document.getText());
 });
@@ -86,7 +85,27 @@ documents.onDidSave((_event) => {
 });
 
 // ========================================================================== //
-//  6. Clear diagnostics on close                                             //
+//  6. Completions                                                            //
+// ========================================================================== //
+connection.onCompletion((params) => {
+    if (!params.textDocument.uri.endsWith(".smark")) return null;
+    const document = documents.get(params.textDocument.uri);
+    if (!document) return null;
+    return getCompletions(document.getText(), params.position);
+});
+
+// ========================================================================== //
+//  7. Document Formatting                                                    //
+// ========================================================================== //
+connection.onDocumentFormatting(async (params) => {
+    if (!params.textDocument.uri.endsWith(".smark")) return [];
+    const document = documents.get(params.textDocument.uri);
+    if (!document) return [];
+    return formatDocument(document.getText(), params.options);
+});
+
+// ========================================================================== //
+//  7. Clear diagnostics on close                                             //
 // ========================================================================== //
 documents.onDidClose((event) => {
 	if (!event.document.uri.endsWith(".smark")) return;
