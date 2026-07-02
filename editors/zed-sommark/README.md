@@ -2,7 +2,7 @@
 
 This directory contains the official SomMark Language Server extension for the [Zed Editor](https://zed.dev/).
 
-![SomMark in Zed](../../screenshots/zed.png)
+![SomMark in Zed](https://raw.githubusercontent.com/Adam-Elmi/SomMark-LSP/master/screenshots/zed.png)
 
 ## Prerequisites
 
@@ -19,7 +19,17 @@ npm install -g sommark-lsp
 
 Because this extension is not yet published to the Zed marketplace, install it as a Dev Extension.
 
-### 1. Load into Zed
+### 1. Build the Extension
+
+The extension must be compiled to WebAssembly before Zed can load it. Make sure you have the Rust toolchain installed, then run:
+
+```bash
+cd editors/zed-sommark
+rustup target add wasm32-wasip1
+cargo build --target wasm32-wasip1 --release
+```
+
+### 2. Load into Zed
 
 1. Open Zed.
 2. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
@@ -28,7 +38,7 @@ Because this extension is not yet published to the Zed marketplace, install it a
 
 Zed will load the extension and attach the language server to any `.smark` file you open.
 
-### 2. Enable Syntax Highlighting
+### 3. Enable Syntax Highlighting
 
 Zed disables LSP-based syntax highlighting by default. Without this step the language server loads and diagnostics work, but no colors appear.
 

@@ -2,7 +2,7 @@
 
 This directory contains the minimal setup required to add full SomMark Language Server support to Vim using the **coc.nvim** plugin.
 
-![SomMark in Vim](../../screenshots/vim.png)
+![SomMark in Vim](https://raw.githubusercontent.com/Adam-Elmi/SomMark-LSP/master/screenshots/vim.png)
 
 ## Prerequisites
 
@@ -43,3 +43,18 @@ You need to tell `coc.nvim` how to launch the SomMark LSP when you open a `.smar
 ```
 
 That's it! Restart Vim and open any `.smark` file to see real-time diagnostics and syntax highlighting.
+
+## 3. Auto-Closing Pairs
+
+The configuration file also includes native Vim keymaps for SomMark syntax — no plugins required. Add the `augroup` block from [`sommark-lsp.vim`](sommark-lsp.vim) to your `~/.vimrc`:
+
+| Type | Gets |
+|------|------|
+| `[` | `[]` |
+| `(` | `()` |
+| `{` | `{}` |
+| `"` | `""` |
+| `'` | `''` |
+| `` ` `` | ` `` `` ` |
+| `${` | `${ }$` |
+| `###` | `###  ###` |
