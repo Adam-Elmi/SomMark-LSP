@@ -1,6 +1,7 @@
 import { SemanticTokensBuilder } from 'vscode-languageserver/node.js';
 import { TOKEN_TYPES, lexSync } from 'sommark';
 import * as acorn from 'acorn';
+import * as csstree from 'css-tree';
 
 // ========================================================================== //
 //  1. Semantic Tokens Legend                                                 //
@@ -189,6 +190,46 @@ export async function computeSemanticTokens(text) {
     }
 
     // ======================================================================== //
+    //  5b. smark-syntax Embedded Language Highlighting                        //
+    // ======================================================================== //
+    {
+        let props = {};
+        let inHeader = false;
+        let lastKey = null;
+
+        for (let i = 0; i < lexerTokens.length; i++) {
+            const t = lexerTokens[i];
+
+            if (t.type === TOKEN_TYPES.OPEN_BRACKET) {
+                props = {};
+                inHeader = true;
+                lastKey = null;
+            } else if (inHeader && t.type === TOKEN_TYPES.KEY) {
+                lastKey = t.value;
+            } else if (inHeader && t.type === TOKEN_TYPES.VALUE && lastKey) {
+                props[lastKey] = t.value;
+                lastKey = null;
+            } else if (inHeader && t.type === TOKEN_TYPES.CLOSE_BRACKET) {
+                inHeader = false;
+                const isRaw = props['smark-raw'] === 'true' || props['smark-raw'] === true;
+                const lang = props['smark-syntax']?.toLowerCase().replace(/['"]/g, '');
+                if (isRaw && lang) {
+                    const bodyToken = lexerTokens[i + 1];
+                    if (bodyToken && bodyToken.type === TOKEN_TYPES.TEXT) {
+                        const bodyText = bodyToken.value;
+                        const bodyOffset = positionToOffset(text, bodyToken.range.start.line, bodyToken.range.start.character);
+                        if (lang === 'js') {
+                            highlightJS(bodyText, bodyOffset, text, allTokens, 3);
+                        } else if (lang === 'css') {
+                            highlightCSS(bodyText, bodyOffset, text, allTokens, 3);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ======================================================================== //
     //  6. Post-Processing                                                      //
     // ======================================================================== //
     allTokens.sort((a, b) => {
@@ -304,6 +345,8 @@ function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
                 type = 'property';
             } else if (label === '${') {
                 type = 'macro';
+            } else if (label === '}' && next && (next.type.label === 'template' || next.type.label === '`')) {
+                type = 'macro'; // closing } of a template interpolation
             } else if (token.type.isAssign || label === 'operator' || label === 'prefix' || label === 'postfix' || ['?', ':', '??', '?.'].includes(label)) {
                 type = 'operator';
             } else if (['(', ')', '{', '}', '[', ']', ',', ';', '.', '...'].includes(label)) {
@@ -318,6 +361,93 @@ function highlightJS(code, startOffset, fullText, allTokens, priority = 3) {
         // Silently ignore JS parse errors for highlighting
     }
 }
+
+// ========================================================================== //
+//  8. CSS Highlighter (css-tree)                                             //
+// ========================================================================== //
+
+function highlightCSS(code, startOffset, fullText, allTokens, priority = 3) {
+    // States: 0=selector, 1=property, 2=value
+    let state = 0;
+    let nestDepth = 0;
+    let prevIdentIsAfterColon = false;
+
+    try {
+        csstree.tokenize(code, (type, start, end) => {
+            const raw = code.slice(start, end);
+            let tokenType = null;
+
+            switch (type) {
+                case 25: // Comment (/* ... */)
+                    tokenType = 'comment';
+                    break;
+                case 3: // AtKeyword (@media, @keyframes)
+                    tokenType = 'keyword';
+                    break;
+                case 4: // Hash (#color or #id)
+                    tokenType = state === 2 ? 'number' : 'variable';
+                    break;
+                case 5: // String
+                    tokenType = 'string';
+                    break;
+                case 7: // URL
+                    tokenType = 'string';
+                    break;
+                case 10: // Number
+                case 11: // Percentage
+                case 12: // Dimension (1px, 2em)
+                    tokenType = 'number';
+                    break;
+                case 16: // Colon
+                    tokenType = 'operator';
+                    if (state === 1) state = 2;
+                    break;
+                case 17: // Semicolon
+                    tokenType = 'operator';
+                    if (state === 2) state = 1;
+                    break;
+                case 18: // Comma
+                    tokenType = 'operator';
+                    break;
+                case 19: // [
+                case 20: // ]
+                case 21: // (
+                case 22: // )
+                    tokenType = 'punctuation';
+                    break;
+                case 23: // {
+                    tokenType = 'punctuation';
+                    nestDepth++;
+                    state = 1;
+                    break;
+                case 24: // }
+                    tokenType = 'punctuation';
+                    nestDepth--;
+                    state = nestDepth > 0 ? 1 : 0;
+                    break;
+                case 1: // Ident
+                    if (state === 0) {
+                        // Selector context
+                        tokenType = raw.startsWith('--') ? 'variable' : 'type';
+                    } else if (state === 1) {
+                        tokenType = raw.startsWith('--') ? 'variable' : 'property';
+                    } else {
+                        // Value context — CSS keywords like red, solid, auto
+                        tokenType = raw.startsWith('--') ? 'variable' : 'keyword';
+                    }
+                    break;
+                case 9: // Delim (. > + ~ * ! etc.)
+                    tokenType = 'operator';
+                    break;
+            }
+
+            if (tokenType) {
+                addManualToken(allTokens, start + startOffset, end + startOffset, fullText, tokenType, priority);
+            }
+        });
+    } catch { /* silently skip invalid CSS during editing */ }
+}
+
 
 function addManualToken(allTokens, startOffset, endOffset, fullText, type, priority) {
     if (endOffset <= startOffset) return;
