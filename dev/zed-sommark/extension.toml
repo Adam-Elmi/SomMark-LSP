@@ -1,0 +1,10 @@
+id = "sommark"
+name = "SomMark"
+version = "1.0.0"
+schema_version = 1
+authors = ["Adam Elmi"]
+description = "SomMark language support"
+
+[language_servers.sommark-lsp]
+name = "SomMark LSP"
+languages = ["sommark"]
