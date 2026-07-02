@@ -7,4 +7,4 @@ description = "SomMark language support"
 
 [language_servers.sommark-lsp]
 name = "SomMark LSP"
-languages = ["sommark", "Markdown"]
+languages = ["sommark"]
