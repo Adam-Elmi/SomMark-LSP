@@ -1,6 +1,6 @@
 import { DiagnosticSeverity } from "vscode-languageserver/node.js";
 import SomMark, { preprocessRuntimeLogic } from "sommark";
-import { findAndLoadConfigFresh } from "./config.js";
+import { findAndLoadConfigFresh, parseFileDirective } from "./config.js";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -57,16 +57,22 @@ async function findLSPConfig(filename) {
     return null;
 }
 
-function buildGlobalsPreamble(lspConfigContent) {
-    if (!lspConfigContent || !lspConfigContent.trim()) return '';
+function parseLspGlobals(lspConfigContent) {
+    if (!lspConfigContent?.trim()) return {};
     try {
         const ast = acorn.parse(lspConfigContent, { ecmaVersion: 'latest', sourceType: 'module' });
-        if (!ast.body || ast.body.length === 0) return '';
-    } catch {
-        return '';
-    }
-    const body = lspConfigContent.replace(/export\s+default/, '').replace(/;\s*$/, '');
-    return `Object.assign(globalThis, (${body}));\n`;
+        for (const node of ast.body) {
+            if (node.type === 'ExportDefaultDeclaration' && node.declaration?.type === 'ObjectExpression') {
+                const globals = {};
+                for (const prop of node.declaration.properties) {
+                    const key = prop.key?.name || prop.key?.value;
+                    if (key) globals[key] = {};
+                }
+                return globals;
+            }
+        }
+    } catch { /* invalid JS */ }
+    return {};
 }
 
 async function doValidate(connection, document) {
@@ -74,7 +80,10 @@ async function doValidate(connection, document) {
     const filename = document.uri.startsWith("file://") ? fileURLToPath(document.uri) : document.uri;
 
     const config = await findAndLoadConfigFresh(filename);
-    const globalsPreamble = buildGlobalsPreamble(await findLSPConfig(filename));
+    const fileDirective = parseFileDirective(text, path.dirname(filename));
+    const lspGlobals = parseLspGlobals(await findLSPConfig(filename));
+    const configVars = config.variables || config.placeholders || {};
+    const allVariables = { ...configVars, ...lspGlobals };
     const diagnostics = [];
     const projectRoot = config.resolvedConfigPath
         ? path.dirname(config.resolvedConfigPath)
@@ -85,13 +94,45 @@ async function doValidate(connection, document) {
         importAliases[key] = path.isAbsolute(value) ? value : path.resolve(projectRoot, value);
     }
 
+    // Validate # @lsp directive values and report errors on line 0
+    const KNOWN_FORMATS = new Set(["html", "markdown", "mdx", "xml", "json", "jsonc", "csv", "toml", "yaml", "text"]);
+    const directiveRange = { start: { line: 0, character: 0 }, end: { line: 0, character: text.indexOf("\n") === -1 ? text.length : text.indexOf("\n") } };
+
+    if (fileDirective.format && !KNOWN_FORMATS.has(fileDirective.format)) {
+        diagnostics.push({
+            severity: DiagnosticSeverity.Error,
+            range: directiveRange,
+            message: `Unknown format "${fileDirective.format}". Known formats: ${[...KNOWN_FORMATS].join(", ")}.`,
+            source: "sommark"
+        });
+    }
+
+    if (fileDirective.mapperFile) {
+        try {
+            await fs.access(fileDirective.mapperFile);
+        } catch {
+            diagnostics.push({
+                severity: DiagnosticSeverity.Error,
+                range: directiveRange,
+                message: `Mapper file not found: "${fileDirective.mapperFile}".`,
+                source: "sommark"
+            });
+        }
+    }
+
+    if (diagnostics.length > 0) {
+        connection.sendDiagnostics({ uri: document.uri, diagnostics });
+        return;
+    }
+
     // 1. SomMark Structural Validation
     const smark = new SomMark({
         src: text,
-        format: config.format || "html",
+        format: fileDirective.format || config.format || "html",
         filename: filename,
-        mapperFile: config.mapperFile || config.mappingFile,
+        mapperFile: fileDirective.mapperFile || config.mapperFile || config.mappingFile,
         placeholders: config.placeholders || config.placeholder || {},
+        variables: allVariables,
         importAliases
     });
 
@@ -108,11 +149,20 @@ async function doValidate(connection, document) {
         });
     }
 
-    // 2. Collect JS Logic Blocks
+    // 2. Transpile — catches JS runtime errors from static blocks and transpiler-level errors.
+    // SomMark handles scoping (loop vars, etc.) correctly, so no manual scope tracking needed.
+    if (ast) {
+        try {
+            await smark.transpile();
+        } catch (error) {
+            diagnostics.push(parseSomMarkError(error, text));
+        }
+    }
+
+    // 3. Collect JS Logic Blocks for Acorn syntax check + runtime preprocessor
     const logicBlocksToValidate = [];
 
     if (ast) {
-        // Collect exact nodes from the AST along with active loop scopes
         const collected = [];
         collectLogicNodes(ast, collected);
         for (const entry of collected) {
@@ -122,7 +172,6 @@ async function doValidate(connection, document) {
                 code: entry.node.code,
                 offset,
                 isRuntime: entry.node.type === "RuntimeLogic",
-                loopVars: entry.loopVars
             });
         }
     } else {
@@ -131,75 +180,107 @@ async function doValidate(connection, document) {
         let match;
         while ((match = jsRegex.exec(text)) !== null) {
             const jsCode = match[1];
-            const offset = match.index + 2; // ${
+            const offset = match.index + 2;
             const beforeBlock = text.slice(0, match.index).trim();
             const isRuntime = !beforeBlock.endsWith("static");
-            logicBlocksToValidate.push({
-                code: jsCode,
-                offset,
-                isRuntime
-            });
+            logicBlocksToValidate.push({ code: jsCode, offset, isRuntime });
         }
     }
 
-    // 3. Embedded JS Validation (Logic Blocks only)
-    if (logicBlocksToValidate.length > 0) {
-        const baseDir = path.dirname(filename);
-        const Evaluator = (await import("sommark")).Evaluator;
+    for (const block of logicBlocksToValidate) {
+        if (!block.code?.trim()) continue;
 
+        // Acorn: catch syntax errors in every block
+        let syntaxValid = false;
         try {
-            // Lazy initialization of Evaluator VM for this validation cycle
-            Evaluator.destroy();
-            await Evaluator.init(baseDir);
+            acorn.parse(block.code, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
+            syntaxValid = true;
+        } catch (e) {
+            const diag = acornToLSPDiagnostic(e, block.code, block.offset, text);
+            if (diag) diagnostics.push(diag);
+        }
 
-            for (const block of logicBlocksToValidate) {
-                if (block.code && block.code.trim()) {
-                    // First check syntax with Acorn (allowing top-level return for static blocks)
-                    let syntaxValid = false;
-                    try {
-                        acorn.parse(block.code, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
-                        syntaxValid = true;
-                    } catch (e) {
-                        const diag = acornToLSPDiagnostic(e, block.code, block.offset, text);
-                        if (diag) diagnostics.push(diag);
-                    }
-
-                    // If syntax is valid, check runtime errors with QuickJS (ONLY for static logic blocks!)
-                    if (syntaxValid && !block.isRuntime) {
-                        try {
-                            if (block.loopVars && block.loopVars.length > 0) {
-                                const mockVars = {};
-                                for (const v of block.loopVars) {
-                                    mockVars[v] = {};
-                                }
-                                Evaluator.inject(mockVars);
-                            }
-                            await Evaluator.execute(globalsPreamble + block.code);
-                        } catch (e) {
-                            const preambleLines = (globalsPreamble.match(/\n/g) || []).length;
-                            const diag = quickJSToLSPDiagnostic(e, block.code, block.offset, text, preambleLines);
-                            if (diag) diagnostics.push(diag);
-                        }
-                    }
-
-                    // If it is a runtime block, run the preprocessor to check compile-time static/import errors!
-                    if (syntaxValid && block.isRuntime) {
-                        try {
-                            await preprocessRuntimeLogic(block.code, filename, config.security || {});
-                        } catch (e) {
-                            const diag = preprocessorToLSPDiagnostic(e, block.code, block.offset, text);
-                            if (diag) diagnostics.push(diag);
-                        }
-                    }
-                }
+        // Preprocessor: validate runtime blocks for SomMark.import / SomMark.static usage
+        if (syntaxValid && block.isRuntime) {
+            try {
+                await preprocessRuntimeLogic(block.code, filename, config.security || {});
+            } catch (e) {
+                const diag = preprocessorToLSPDiagnostic(e, block.code, block.offset, text);
+                if (diag) diagnostics.push(diag);
             }
-        } finally {
-            // ALWAYS destroy and clean up the Evaluator VM instance at the end of the validation cycle
-            Evaluator.destroy();
+        }
+    }
+
+    // 4. smark-syntax embedded language validation
+    const SUPPORTED_SYNTAX_LANGS = new Set(["js", "css"]);
+    if (ast) {
+        const syntaxBlocks = collectSyntaxBlocks(ast);
+        for (const block of syntaxBlocks) {
+            const lang = block.lang;
+            const bodyLine = block.node.range?.start?.line ?? 0;
+            const blockRange = clampRange(text, bodyLine, 0, bodyLine, 100);
+
+            if (!SUPPORTED_SYNTAX_LANGS.has(lang)) {
+                diagnostics.push({
+                    severity: DiagnosticSeverity.Error,
+                    range: blockRange,
+                    message: `[LSP] Unsupported smark-syntax language "${lang}". Supported: ${[...SUPPORTED_SYNTAX_LANGS].join(", ")}.`,
+                    source: "sommark-lsp"
+                });
+                continue;
+            }
+
+            const body = block.node.body?.map(n => String(n.text || "")).join("") || "";
+            if (!body.trim()) continue;
+
+            const bodyOffset = positionToOffset(text, { line: bodyLine + 1, character: 0 });
+
+            if (lang === "js") {
+                try {
+                    acorn.parse(body, { ecmaVersion: "latest", sourceType: "module", allowReturnOutsideFunction: true });
+                } catch (e) {
+                    const diag = acornToLSPDiagnostic(e, body, bodyOffset, text);
+                    if (diag) diagnostics.push({ ...diag, source: "sommark-lsp" });
+                }
+            } else if (lang === "css") {
+                try {
+                    const csstree = await import("css-tree");
+                    csstree.parse(body, {
+                        onParseError(e) {
+                            const errLine = bodyLine + 1 + (e.line - 1);
+                            const errChar = e.column - 1;
+                            const range = clampRange(text, errLine, errChar, errLine, errChar + 10);
+                            diagnostics.push({
+                                severity: DiagnosticSeverity.Error,
+                                range,
+                                message: `[LSP] CSS: ${e.message}`,
+                                source: "sommark-lsp"
+                            });
+                        }
+                    });
+                } catch { /* import failure — css-tree unavailable */ }
+            }
         }
     }
 
     connection.sendDiagnostics({ uri: document.uri, diagnostics });
+}
+
+function collectSyntaxBlocks(nodes, result = []) {
+    if (!nodes) return result;
+    const array = Array.isArray(nodes) ? nodes : [nodes];
+    for (const node of array) {
+        if (!node) continue;
+        if (node.type === "Block") {
+            const isRaw = node.directives?.raw === "true" || node.directives?.raw === true;
+            const lang = node.directives?.syntax;
+            if (isRaw && lang) {
+                result.push({ node, lang: String(lang).toLowerCase().replace(/['"]/g, "") });
+            }
+        }
+        if (node.body) collectSyntaxBlocks(node.body, result);
+    }
+    return result;
 }
 
 function acornToLSPDiagnostic(e, code, offset, fullText) {
@@ -304,20 +385,10 @@ function preprocessorToLSPDiagnostic(e, code, offset, fullText) {
     const startPos = offsetToPosition(fullText, targetOffset);
     const endPos = offsetToPosition(fullText, targetOffset + targetLength);
 
-    let shortMessage = cleanError;
-    if (shortMessage.includes('\n')) {
-        const lines = shortMessage.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines[0] === "[Transpiler Error]:" && lines[1]) {
-            shortMessage = `${lines[0]} ${lines[1]}`;
-        } else {
-            shortMessage = lines[0];
-        }
-    }
-
     return {
         severity: DiagnosticSeverity.Error,
         range: clampRange(fullText, startPos.line, startPos.character, endPos.line, endPos.character),
-        message: shortMessage,
+        message: cleanError,
         source: 'sommark-preprocessor'
     };
 }
@@ -380,42 +451,21 @@ export function clampRange(text, startLine, startChar, endLine, endChar) {
 }
 
 
-function collectLogicNodes(nodes, result = [], activeLoopVars = []) {
+function collectLogicNodes(nodes, result = []) {
     if (!nodes) return result;
     const array = Array.isArray(nodes) ? nodes : [nodes];
     for (const node of array) {
         if (!node) continue;
-
-        let newLoopVars = [...activeLoopVars];
-        if (node.type === "ForEach") {
-            let asVar = "item";
-            if (node.args) {
-                if (typeof node.args.as === "string") {
-                    asVar = node.args.as;
-                } else if (node.args.as && typeof node.args.as === "object") {
-                    asVar = node.args.as.value || "item";
-                }
-            }
-            newLoopVars.push(asVar);
-        }
-
         if (node.type === "StaticLogic" || node.type === "RuntimeLogic") {
-            result.push({
-                node,
-                loopVars: activeLoopVars
-            });
+            result.push({ node });
         }
-        if (node.args) {
-            for (const key in node.args) {
-                const val = node.args[key];
-                if (val && typeof val === "object") {
-                    collectLogicNodes(val, result, newLoopVars);
-                }
+        if (node.props) {
+            for (const key in node.props) {
+                const val = node.props[key];
+                if (val && typeof val === "object") collectLogicNodes(val, result);
             }
         }
-        if (node.body) {
-            collectLogicNodes(node.body, result, newLoopVars);
-        }
+        if (node.body) collectLogicNodes(node.body, result);
     }
     return result;
 }
@@ -445,60 +495,31 @@ export function parseSomMarkError(error, text) {
     }
     const range = clampRange(text, startLine, startChar, endLine, endChar);
     
-    let shortMessage = cleanError;
-    // Extract just the core error reason instead of the huge multiline snippet (fixes Zed inline rendering)
-    const msgMatch = cleanError.match(/\n([^\n]+)\s+at line\s*\d+/i);
-    if (msgMatch) {
-        shortMessage = msgMatch[1].trim();
-    }
-    
-    return { severity: DiagnosticSeverity.Error, range, message: shortMessage, source: 'sommark' };
+    // Strip position coordinates — already encoded in the diagnostic range
+    const message = cleanError
+        .replace(/\s*from line\s*\d+,\s*column\s*\d+\s*to line\s*\d+,\s*column\s*\d+/gi, '')
+        .replace(/\s*at line\s*\d+,\s*from column\s*\d+\s*to\s*(?:column\s*)?\d+/gi, '')
+        .replace(/\s*at line\s*\d+/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    return { severity: DiagnosticSeverity.Error, range, message, source: 'sommark' };
 }
 
 export function parseSomMarkWarning(w, text) {
+    if (w && typeof w === "object") {
+        const message = stripColors(w.message || "");
+        const line = w.range?.start?.line ?? 0;
+        const range = clampRange(text, line, 0, line, 100);
+        return { severity: DiagnosticSeverity.Warning, range, message, source: "sommark" };
+    }
     const cleanWarning = stripColors(w);
     const lineMatch = cleanWarning.match(/at line\s*(\d+)/i);
-    let line = lineMatch ? parseInt(lineMatch[1]) - 1 : 0;
+    const line = lineMatch ? parseInt(lineMatch[1]) - 1 : 0;
     const range = clampRange(text, line, 0, line, 100);
-    return {
-        severity: DiagnosticSeverity.Warning,
-        range,
-        message: cleanWarning,
-        source: 'sommark'
-    };
+    return { severity: DiagnosticSeverity.Warning, range, message: cleanWarning, source: "sommark" };
 }
 
-function quickJSToLSPDiagnostic(e, code, offset, fullText, preambleLines = 0) {
-    let startPos;
-    if (e.line !== undefined) {
-        // QuickJS line is 1-indexed and relative to the full executed code
-        // (preamble + block.code). Subtract preamble lines to get the position
-        // within block.code only.
-        const codeRelativeLine = e.line - preambleLines;
-        if (codeRelativeLine < 1) {
-            startPos = offsetToPosition(fullText, offset);
-        } else {
-            const lines = code.split('\n');
-            let relativeOffset = 0;
-            for (let i = 0; i < codeRelativeLine - 1; i++) {
-                if (lines[i] !== undefined) relativeOffset += lines[i].length + 1;
-            }
-            relativeOffset += (e.column !== undefined ? e.column - 1 : 0);
-            startPos = offsetToPosition(fullText, offset + relativeOffset);
-        }
-    } else {
-        startPos = offsetToPosition(fullText, offset);
-    }
-
-    const range = clampRange(fullText, startPos.line, startPos.character, startPos.line, startPos.character + 1);
-
-    return {
-        severity: DiagnosticSeverity.Error,
-        range,
-        message: `[Runtime Error]: ${e.message}`,
-        source: 'quickjs'
-    };
-}
 // ========================================================================== //
 //  3. Utility: Strip ANSI & Formatting                                       //
 // ========================================================================== //

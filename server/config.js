@@ -2,6 +2,34 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
+/**
+ * Parses a per-file LSP directive from the first line of a .smark file.
+ * Syntax: # @lsp format: html mapper: ./path/to/mapper.js
+ * Both keys are optional and can appear in any order.
+ *
+ * @param {string} text - Full file content
+ * @param {string} fileDir - Directory of the file, used to resolve relative mapper paths
+ * @returns {{ format?: string, mapperFile?: string }}
+ */
+export function parseFileDirective(text, fileDir) {
+    const firstLine = text.slice(0, text.indexOf("\n") === -1 ? text.length : text.indexOf("\n")).trim();
+    if (!firstLine.startsWith("#") || !firstLine.includes("@lsp")) return {};
+
+    const directive = firstLine.slice(firstLine.indexOf("@lsp") + 4).trim();
+    const result = {};
+
+    const formatMatch = directive.match(/\bformat:\s*([^,\s]+)/);
+    if (formatMatch) result.format = formatMatch[1];
+
+    const mapperMatch = directive.match(/\bmapper:\s*([^,\s]+)/);
+    if (mapperMatch) {
+        const raw = mapperMatch[1];
+        result.mapperFile = path.isAbsolute(raw) ? raw : path.resolve(fileDir, raw);
+    }
+
+    return result;
+}
+
 const CONFIG_FILE_NAME = "smark.config.js";
 
 async function loadConfigFileFresh(configPath) {
