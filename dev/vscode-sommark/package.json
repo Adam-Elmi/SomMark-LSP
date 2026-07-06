@@ -1,8 +1,8 @@
 {
-  "name": "sommark-lsp",
-  "displayName": "SomMark Language Server",
-  "description": "Real-time diagnostics, code formatting, and semantic highlighting for SomMark files.",
-  "version": "3.0.1",
+  "name": "sommark-lsp-dev",
+  "displayName": "SomMark Language Server (dev)",
+  "description": "Dev build — points to local SomMark-LSP server.",
+  "version": "0.0.1",
   "publisher": "Adam-Elmi",
   "engines": {
     "vscode": "^1.104.0"
@@ -35,13 +35,7 @@
       "editor.semanticHighlighting.enabled": true
     }
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Adam-Elmi/SomMark-LSP.git"
-  },
   "dependencies": {
-    "sommark": "^5.2.0",
-    "sommark-lsp": "^3.0.1",
     "vscode-languageclient": "^9.0.1"
   }
 }

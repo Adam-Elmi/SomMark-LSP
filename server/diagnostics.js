@@ -1,7 +1,7 @@
 import { DiagnosticSeverity } from "vscode-languageserver/node.js";
 import SomMark, { preprocessRuntimeLogic } from "sommark";
 import { findAndLoadConfigFresh, parseFileDirective } from "./config.js";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs/promises";
 import * as acorn from 'acorn';
@@ -47,7 +47,8 @@ async function findLSPConfig(filename) {
     while (currentDir) {
         const configPath = path.join(currentDir, 'sommark.lsp.js');
         try {
-            return await fs.readFile(configPath, 'utf8');
+            await fs.access(configPath);
+            return configPath;
         } catch {
             const parent = path.dirname(currentDir);
             if (parent === currentDir) break;
@@ -57,22 +58,52 @@ async function findLSPConfig(filename) {
     return null;
 }
 
-function parseLspGlobals(lspConfigContent) {
-    if (!lspConfigContent?.trim()) return {};
+async function loadLspConfig(configPath) {
+    if (!configPath) return {};
     try {
-        const ast = acorn.parse(lspConfigContent, { ecmaVersion: 'latest', sourceType: 'module' });
-        for (const node of ast.body) {
-            if (node.type === 'ExportDefaultDeclaration' && node.declaration?.type === 'ObjectExpression') {
-                const globals = {};
-                for (const prop of node.declaration.properties) {
-                    const key = prop.key?.name || prop.key?.value;
-                    if (key) globals[key] = {};
-                }
-                return globals;
-            }
+        const content = await fs.readFile(configPath, 'utf8');
+        const match = content.match(/export\s+default\s+([\s\S]+)/);
+        if (!match) return {};
+        const valueExpr = match[1].replace(/;\s*$/, '');
+        // eslint-disable-next-line no-new-func
+        return new Function(`return (${valueExpr})`)() || {};
+    } catch { return {}; }
+}
+
+// Match balanced parentheses up to 2 levels deep — handles args like
+// SomMark.raw(JSON.stringify({...}, null, 2)) without leaving a stray ')'.
+const BALANCED_ARGS = '(?:[^)(]|\\((?:[^)(]|\\([^)]*\\))*\\))*';
+
+// Recursively walk the stub object and replace call sites in source.
+// Functions → replaced with their return value (JSON-encoded).
+// Plain objects → recurse with dotted prefix.
+function applyLspStubs(text, stubs, prefix = '') {
+    for (const [key, value] of Object.entries(stubs || {})) {
+        const fullKey = prefix ? `${prefix}.${key}` : key;
+        if (typeof value === 'function') {
+            try {
+                const returnVal = value();
+                const jsonVal = JSON.stringify(returnVal ?? null);
+                const escaped = fullKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                text = text.replace(new RegExp(`${escaped}\\s*\\(${BALANCED_ARGS}\\)`, 'g'), jsonVal);
+            } catch { /* skip bad stubs */ }
+        } else if (value !== null && typeof value === 'object') {
+            text = applyLspStubs(text, value, fullKey);
         }
-    } catch { /* invalid JS */ }
-    return {};
+    }
+    return text;
+}
+
+function parseLspGlobals(stubs) {
+    const globals = {};
+    for (const [key, value] of Object.entries(stubs || {})) {
+        // Include function stubs as no-op functions so SomMark's evaluator
+        // recognises framework-injected globals (glob, getHeadings, etc.)
+        // without the user having to list them in smark.config.js.
+        if (typeof value === 'function') globals[key] = value;
+        else if (value !== null) globals[key] = value ?? {};
+    }
+    return globals;
 }
 
 async function doValidate(connection, document) {
@@ -81,9 +112,10 @@ async function doValidate(connection, document) {
 
     const config = await findAndLoadConfigFresh(filename);
     const fileDirective = parseFileDirective(text, path.dirname(filename));
-    const lspGlobals = parseLspGlobals(await findLSPConfig(filename));
+    const lspStubs = await loadLspConfig(await findLSPConfig(filename));
+    const processedText = applyLspStubs(text, lspStubs);
     const configVars = config.variables || config.placeholders || {};
-    const allVariables = { ...configVars, ...lspGlobals };
+    const allVariables = { ...configVars, ...parseLspGlobals(lspStubs) };
     const diagnostics = [];
     const projectRoot = config.resolvedConfigPath
         ? path.dirname(config.resolvedConfigPath)
@@ -127,7 +159,7 @@ async function doValidate(connection, document) {
 
     // 1. SomMark Structural Validation
     const smark = new SomMark({
-        src: text,
+        src: processedText,
         format: fileDirective.format || config.format || "html",
         filename: filename,
         mapperFile: fileDirective.mapperFile || config.mapperFile || config.mappingFile,
@@ -196,15 +228,26 @@ async function doValidate(connection, document) {
             acorn.parse(block.code, { ecmaVersion: 'latest', sourceType: 'module', allowReturnOutsideFunction: true });
             syntaxValid = true;
         } catch (e) {
-            const diag = acornToLSPDiagnostic(e, block.code, block.offset, text);
-            if (diag) diagnostics.push(diag);
+            // Retry as a parenthesised expression — handles {obj} and [arr] literals
+            // which are ambiguous in statement context ({} = block, not object).
+            try {
+                acorn.parse(`(${block.code.trim()})`, { ecmaVersion: 'latest', sourceType: 'module' });
+                syntaxValid = true;
+            } catch {
+                const diag = acornToLSPDiagnostic(e, block.code, block.offset, text);
+                if (diag) diagnostics.push(diag);
+            }
         }
 
-        // Preprocessor: validate runtime blocks for SomMark.import / SomMark.static usage
+        // Preprocessor: validate runtime blocks for SomMark.import / SomMark.static usage.
+        // SomMark.static requires an active evaluator (only live during smark.transpile above);
+        // those errors are already caught in step 2. Ignore them here to avoid false positives.
         if (syntaxValid && block.isRuntime) {
             try {
                 await preprocessRuntimeLogic(block.code, filename, config.security || {});
             } catch (e) {
+                const msg = typeof e === 'string' ? e : (e?.message ?? '');
+                if (msg.includes("No active EvaluatorState")) continue;
                 const diag = preprocessorToLSPDiagnostic(e, block.code, block.offset, text);
                 if (diag) diagnostics.push(diag);
             }
