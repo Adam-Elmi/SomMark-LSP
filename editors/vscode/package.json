@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "sommark": "^5.3.0",
-    "sommark-lsp": "^3.0.1",
+    "sommark-lsp": "^3.0.2",
     "vscode-languageclient": "^9.0.1"
   }
 }
