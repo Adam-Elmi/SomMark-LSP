@@ -77,21 +77,26 @@ const BALANCED_ARGS = '(?:[^)(]|\\((?:[^)(]|\\([^)]*\\))*\\))*';
 // Recursively walk the stub object and replace call sites in source.
 // Functions → replaced with their return value (JSON-encoded).
 // Plain objects → recurse with dotted prefix.
+// Substitutions are scoped to ${ }$ logic blocks only — replacing globally
+// would corrupt SomMark block syntax (e.g. `getPages()` → `[]` inside [p] text).
 function applyLspStubs(text, stubs, prefix = '') {
-    for (const [key, value] of Object.entries(stubs || {})) {
-        const fullKey = prefix ? `${prefix}.${key}` : key;
-        if (typeof value === 'function') {
-            try {
-                const returnVal = value();
-                const jsonVal = JSON.stringify(returnVal ?? null);
-                const escaped = fullKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                text = text.replace(new RegExp(`${escaped}\\s*\\(${BALANCED_ARGS}\\)`, 'g'), jsonVal);
-            } catch { /* skip bad stubs */ }
-        } else if (value !== null && typeof value === 'object') {
-            text = applyLspStubs(text, value, fullKey);
+    // Split into logic-block segments and non-logic segments, apply stubs only inside blocks.
+    return text.replace(/(\$\{[\s\S]*?\}\$)/g, (block) => {
+        for (const [key, value] of Object.entries(stubs || {})) {
+            const fullKey = prefix ? `${prefix}.${key}` : key;
+            if (typeof value === 'function') {
+                try {
+                    const returnVal = value();
+                    const jsonVal = JSON.stringify(returnVal ?? null);
+                    const escaped = fullKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    block = block.replace(new RegExp(`${escaped}\\s*\\(${BALANCED_ARGS}\\)`, 'g'), jsonVal);
+                } catch { /* skip bad stubs */ }
+            } else if (value !== null && typeof value === 'object') {
+                block = applyLspStubs(block, value, fullKey);
+            }
         }
-    }
-    return text;
+        return block;
+    });
 }
 
 function parseLspGlobals(stubs) {
