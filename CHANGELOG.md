@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.2 (2026-07-09)
+
+### Fixed
+
+- **`applyLspStubs` corrupted block syntax outside logic blocks** — the stub replacement was running a global text substitution across the entire document. This turned function calls like `getPages()` inside label text or props into `[]`, breaking the parser. Replacements are now scoped to `${ }$` logic blocks only.
+
 ## v3.0.0 (2026-07-02)
 
 ### Added
